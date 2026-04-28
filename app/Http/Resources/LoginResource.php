@@ -22,8 +22,8 @@ class LoginResource extends JsonResource
                 'id'    => $this->id,
                 'name'  => $this->profile?->name,
                 'email' => $this->email,
-                'roles' => $this->roles?->pluck('name') ?? [],
-                'permissions' => $this->getAllPermissions()->pluck('name') ?? [],
+                // 'roles' => $this->roles?->pluck('name') ?? [],
+                // 'permissions' => $this->getAllPermissions()->pluck('name') ?? [],
             ],
 
             'auth' => [

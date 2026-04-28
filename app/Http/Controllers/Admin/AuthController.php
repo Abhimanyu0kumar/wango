@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LoginRequest;
 use App\Http\Resources\LoginResource;
 use App\Models\Admin;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
@@ -33,10 +34,31 @@ class AuthController extends Controller
             ]);
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        $admin = request()->admin();
-        $admin->token()->revoke();
+        \Log::info('Admin logout request received', ['admin_id' => auth('admin')->id()]);
+        $admin = auth('admin')->user();
+
+        // Revoke the current access token
+        $bearerToken = $request->bearerToken();
+        if ($bearerToken) {
+            try {
+                $parts = explode('.', $bearerToken);
+                if (count($parts) === 3) {
+                    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                    $tokenId = $payload['jti'] ?? null;
+
+                    if ($tokenId) {
+                        $tokenRecord = \Laravel\Passport\Token::find($tokenId);
+                        if ($tokenRecord) {
+                            $tokenRecord->revoke();
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Token parsing failed, continue with logout
+            }
+        }
 
         return response()->json([
             'message' => 'Admin logged out successfully'

@@ -59,6 +59,17 @@ class AdminAccessControlSeeder extends Seeder
         $roles = [
             'super-admin' => $permissions,
 
+            'admin' => [
+                'dashboard.view',
+                'users.view',
+                'kyc.view',
+                'bets.view',
+                'wallets.view',
+                'withdrawals.view',
+                'deposits.view',
+                'reports.view',
+            ],
+
             'finance-manager' => [
                 'dashboard.view',
                 'wallets.view',

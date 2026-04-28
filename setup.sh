@@ -90,7 +90,8 @@ CLIENT_EXISTS=$(php artisan tinker --execute="echo \Laravel\Passport\Client::cou
 
 if [ -z "$CLIENT_EXISTS" ] || [ "$CLIENT_EXISTS" = "0" ]; then
     echo "Creating Passport Personal Access Client..."
-    php artisan passport:client --personal --name="Personal Access Client" --no-interaction
+    php artisan passport:client --personal --name="Admin Access Client" --provider="admins" --no-interaction
+    php artisan passport:client --personal --name="User Access Client" --provider="users" --no-interaction
 fi
 
 # -------------------------------------------------
