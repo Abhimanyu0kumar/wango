@@ -18,22 +18,12 @@ class LoginResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'user' => [
+            'admin' => [
                 'id'    => $this->id,
                 'name'  => $this->profile?->name,
                 'email' => $this->email,
-                // 'roles' => $this->roles?->pluck('name') ?? [],
-                // 'permissions' => $this->getAllPermissions()->pluck('name') ?? [],
             ],
-
-            'auth' => [
-                'token' => $this->token,
-                'type'  => 'Bearer',
-            ],
-
-            'meta' => [
-                'login_at' => now()->toDateTimeString(),
-            ],
+            'token' => $this->token,
         ];
     }
 }

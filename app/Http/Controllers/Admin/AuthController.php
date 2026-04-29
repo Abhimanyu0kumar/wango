@@ -28,15 +28,11 @@ class AuthController extends Controller
         $admin->tokens()->delete();
         $token = $admin->createToken(self::$admin_token)->accessToken;
 
-        return (new LoginResource($admin, $token))
-            ->additional([
-                'message' => 'Admin logged in successfully.'
-            ]);
+        return new LoginResource($admin, $token);
     }
 
     public function logout(Request $request)
     {
-        \Log::info('Admin logout request received', ['admin_id' => auth('admin')->id()]);
         $admin = auth('admin')->user();
 
         // Revoke the current access token
