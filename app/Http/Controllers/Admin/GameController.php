@@ -100,32 +100,20 @@ class GameController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Game $game)
     {
-        $game = Game::with(['category', 'rounds', 'bets'])->find($id);
-
-        if (!$game) {
-            return response()->json(['message' => 'Game not found'], 404);
-        }
-
-        return response()->json(['data' => $game]);
+        return response()->json(['data' => $game->load(['category', 'rounds', 'bets'])]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Game $game)
     {
-        $game = Game::find($id);
-
-        if (!$game) {
-            return response()->json(['message' => 'Game not found'], 404);
-        }
-
         $validator = Validator::make($request->all(), [
             'category_id' => 'nullable|exists:categories,id',
             'name' => 'string|max:150',
-            'slug' => 'nullable|string|max:150|unique:games,slug,' . $id,
+            'slug' => 'nullable|string|max:150|unique:games,slug,' . $game->id,
             'engine_key' => 'string|max:100',
             'provider' => 'nullable|string|max:100',
             'min_bet' => 'nullable|numeric|min:0',
@@ -152,14 +140,8 @@ class GameController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Game $game)
     {
-        $game = Game::find($id);
-
-        if (!$game) {
-            return response()->json(['message' => 'Game not found'], 404);
-        }
-
         $game->delete();
 
         return response()->json(['message' => 'Game deleted successfully']);
@@ -168,14 +150,8 @@ class GameController extends Controller
     /**
      * Toggle game status.
      */
-    public function toggleStatus(string $id)
+    public function toggleStatus(Game $game)
     {
-        $game = Game::find($id);
-
-        if (!$game) {
-            return response()->json(['message' => 'Game not found'], 404);
-        }
-
         $statuses = ['active', 'inactive', 'maintenance'];
         $currentIndex = array_search($game->status, $statuses);
         $nextIndex = ($currentIndex + 1) % count($statuses);
@@ -191,14 +167,8 @@ class GameController extends Controller
     /**
      * Set game status to maintenance.
      */
-    public function setMaintenance(string $id)
+    public function setMaintenance(Game $game)
     {
-        $game = Game::find($id);
-
-        if (!$game) {
-            return response()->json(['message' => 'Game not found'], 404);
-        }
-
         $game->status = 'maintenance';
         $game->save();
 

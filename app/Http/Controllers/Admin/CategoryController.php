@@ -83,31 +83,19 @@ class CategoryController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Category $category)
     {
-        $category = Category::find($id);
-
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-
         return response()->json(['data' => $category]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Category $category)
     {
-        $category = Category::find($id);
-
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-
         $validator = Validator::make($request->all(), [
             'name' => 'string|max:100',
-            'slug' => 'nullable|string|max:120|unique:categories,slug,' . $id,
+            'slug' => 'nullable|string|max:120|unique:categories,slug,' . $category->id,
             'description' => 'nullable|string',
             'icon_url' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
@@ -131,14 +119,8 @@ class CategoryController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Category $category)
     {
-        $category = Category::find($id);
-
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-
         $category->delete();
 
         return response()->json(['message' => 'Category deleted successfully']);
@@ -147,14 +129,8 @@ class CategoryController extends Controller
     /**
      * Toggle category status.
      */
-    public function toggleStatus(string $id)
+    public function toggleStatus(Category $category)
     {
-        $category = Category::find($id);
-
-        if (!$category) {
-            return response()->json(['message' => 'Category not found'], 404);
-        }
-
         $category->status = $category->status === 'active' ? 'inactive' : 'active';
         $category->save();
 

@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -21,29 +22,25 @@ class UserController extends Controller
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
-        if ($request->has('active')) {
-            $query->where('active', $request->get('active'));
-        }
-
-        if ($request->has('blocked')) {
-            $query->where('blocked', $request->get('blocked'));
-        }
-
-        $perPage = $request->get('per_page', 15);
+        $perPage = $request->get('limit', $request->get('per_page', 15));
         $users = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $users->items(),
-            'meta' => [
-                'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
-                'per_page' => $users->perPage(),
-                'total' => $users->total(),
-            ]
+            'success' => true,
+            'data' => [
+                'users' => $users->items(),
+                'pagination' => [
+                    'page' => $users->currentPage(),
+                    'limit' => $users->perPage(),
+                    'total' => $users->total(),
+                    'totalPages' => $users->lastPage(),
+                ]
+            ],
+            'message' => 'Success'
         ]);
     }
 
@@ -53,8 +50,9 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'phone' => 'required|string|unique:users,phone',
-            'email' => 'required|email|unique:users,email',
+            'name' => 'nullable|string|max:255',           // Add this
+            'phone' => 'nullable|string|unique:users,phone',
+            'email' => 'required|email|unique:users,email', // Keep email required
             'password' => 'required|string|min:8',
             'referral_code' => 'nullable|string|unique:users,referral_code',
             'referred_by' => 'nullable|exists:users,id',
@@ -63,15 +61,28 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         $data = $validator->validated();
         $data['password'] = Hash::make($data['password']);
 
+        do {
+            $referralCode = strtoupper(Str::random(8)); // Example: A8X9K2LM
+        } while (User::where('referral_code', $referralCode)->exists());
+
+        $data['referral_code'] = $referralCode;
+
+        // Remove null values to keep DB clean
+        $data = array_filter($data, fn($value) => $value !== null);
+
         $user = User::create($data);
 
         return response()->json([
+            'success' => true,
             'message' => 'User created successfully',
             'data' => $user
         ], 201);
@@ -80,40 +91,34 @@ class UserController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(User $user)
     {
-        $user = User::with('profile')->find($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        return response()->json(['data' => $user]);
+        return response()->json([
+            'success' => true,
+            'data' => $user->load('profile')
+        ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, User $user)
     {
-        $user = User::find($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
         $validator = Validator::make($request->all(), [
-            'phone' => 'string|unique:users,phone,' . $id,
-            'email' => 'email|unique:users,email,' . $id,
+            'phone' => 'nullable|string|unique:users,phone,' . $user->id,
+            'email' => 'email|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:8',
-            'referral_code' => 'nullable|string|unique:users,referral_code,' . $id,
+            'referral_code' => 'nullable|string|unique:users,referral_code,' . $user->id,
             'referred_by' => 'nullable|exists:users,id',
             'active' => 'boolean',
             'blocked' => 'boolean',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         $data = $validator->validated();
@@ -125,6 +130,7 @@ class UserController extends Controller
         $user->update($data);
 
         return response()->json([
+            'success' => true,
             'message' => 'User updated successfully',
             'data' => $user
         ]);
@@ -133,56 +139,55 @@ class UserController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(User $user)
     {
-        $user = User::find($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
         $user->delete();
 
-        return response()->json(['message' => 'User deleted successfully']);
-    }
-
-    /**
-     * Toggle user active status.
-     */
-    public function UserActive(string $id)
-    {
-        $user = User::find($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        $user->active = !$user->active;
-        $user->save();
-
         return response()->json([
-            'message' => 'User ' . ($user->active ? 'activated' : 'deactivated') . ' successfully',
-            'active' => $user->active
+            'success' => true,
+            'message' => 'User deleted successfully'
         ]);
     }
 
     /**
-     * Toggle user blocked status.
+     * Toggle or set user active status.
      */
-    public function UserBlocked(string $id)
+    public function UserActive(Request $request, User $user)
     {
-        $user = User::find($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
+        // Support both explicit value and toggle behavior
+        if ($request->has('active')) {
+            $user->active = $request->boolean('active');
+        } else {
+            $user->active = !$user->active;
         }
-
-        $user->blocked = !$user->blocked;
+        
         $user->save();
 
         return response()->json([
+            'success' => true,
+            'message' => 'User ' . ($user->active ? 'activated' : 'deactivated') . ' successfully',
+            'data' => ['active' => $user->active]
+        ]);
+    }
+
+    /**
+     * Toggle or set user blocked status.
+     */
+    public function UserBlocked(Request $request, User $user)
+    {
+        // Support both explicit value and toggle behavior
+        if ($request->has('blocked')) {
+            $user->blocked = $request->boolean('blocked');
+        } else {
+            $user->blocked = !$user->blocked;
+        }
+        
+        $user->save();
+
+        return response()->json([
+            'success' => true,
             'message' => 'User ' . ($user->blocked ? 'blocked' : 'unblocked') . ' successfully',
-            'blocked' => $user->blocked
+            'data' => ['blocked' => $user->blocked]
         ]);
     }
 }

@@ -132,30 +132,18 @@ class AdminController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Admin $admin)
     {
-        $admin = Admin::with(['profile', 'roles'])->find($id);
-
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
-        return response()->json(['data' => $admin]);
+        return response()->json(['data' => $admin->load(['profile', 'roles'])]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Admin $admin)
     {
-        $admin = Admin::find($id);
-
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
         $validator = Validator::make($request->all(), [
-            'email' => 'email|unique:admins,email,' . $id,
+            'email' => 'email|unique:admins,email,' . $admin->id,
             'password' => 'nullable|string|min:8',
             'status' => 'nullable|boolean',
             'roles' => 'nullable|array',
@@ -226,14 +214,8 @@ class AdminController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Admin $admin)
     {
-        $admin = Admin::find($id);
-
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
         $admin->delete();
 
         return response()->json(['message' => 'Admin deleted successfully']);
@@ -242,14 +224,8 @@ class AdminController extends Controller
     /**
      * Toggle admin status.
      */
-    public function toggleStatus(string $id)
+    public function toggleStatus(Admin $admin)
     {
-        $admin = Admin::find($id);
-
-        if (!$admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
         $admin->status = !$admin->status;
         $admin->save();
 

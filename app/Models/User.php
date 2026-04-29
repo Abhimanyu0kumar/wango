@@ -37,4 +37,44 @@ class User extends Authenticatable
     {
         return $this->hasOne(UserProfile::class);
     }
+
+    public function walletAccounts()
+    {
+        return $this->hasMany(WalletAccount::class);
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    public function bets()
+    {
+        return $this->hasMany(Bet::class);
+    }
+
+    public function deposits()
+    {
+        return $this->hasMany(Deposit::class);
+    }
+
+    public function withdrawals()
+    {
+        return $this->hasMany(Withdrawal::class);
+    }
+
+    public function kycDocuments()
+    {
+        return $this->hasMany(UserKycDocument::class);
+    }
+
+    public function securitySettings()
+    {
+        return $this->hasOne(UserSecurity::class);
+    }
+
+    public function devices()
+    {
+        return $this->hasMany(UserDevice::class);
+    }
 }
