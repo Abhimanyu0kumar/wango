@@ -303,4 +303,14 @@ class AdminController extends Controller
             'data' => $admin
         ]);
     }
+
+    /**
+     * List available roles for assignment.
+     */
+    public function listRoles()
+    {
+        $roles = Role::where('guard_name', 'admin')->get(['id', 'name', 'guard_name']);
+
+        return response()->json(['data' => $roles]);
+    }
 }

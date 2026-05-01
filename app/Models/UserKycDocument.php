@@ -14,13 +14,19 @@ class UserKycDocument extends Model
         'back_image_url',
         'selfie_image_url',
         'status',
-        'verified_at',
-        'verified_by',
         'rejection_reason',
+        'submitted_at',
+        'reviewed_at',
+        'reviewed_by',
+        'expires_at',
+        'metadata',
     ];
 
     protected $casts = [
-        'verified_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'reviewed_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function user()

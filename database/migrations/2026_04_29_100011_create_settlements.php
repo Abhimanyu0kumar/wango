@@ -27,7 +27,7 @@ return new class extends Migration
             $table->decimal('payout_amount', 18, 2)->default(0);
             $table->decimal('profit_loss', 18, 2)->default(0);
 
-            $table->string('settled_by', 50)->default('system');
+            $table->string('settled_by', 50)->nullable();
 
             $table->timestamp('settled_at')->useCurrent();
 

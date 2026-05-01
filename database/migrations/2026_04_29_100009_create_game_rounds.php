@@ -24,8 +24,14 @@ return new class extends Migration
                 'waiting',
                 'betting_open',
                 'locked',
-                'running',
+                'pre_flop',
+                'flop',
+                'turn',
+                'river',
+                'showdown',
+                'settling',
                 'settled',
+                'running',
                 'cancelled'
             ])->default('waiting');
 

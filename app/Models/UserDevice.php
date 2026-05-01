@@ -8,17 +8,19 @@ class UserDevice extends Model
 {
     protected $fillable = [
         'user_id',
-        'device_type',
-        'device_token',
-        'ip_address',
-        'user_agent',
-        'last_active_at',
-        'is_active',
+        'device_fingerprint',
+        'platform',
+        'app_version',
+        'push_token',
+        'is_trusted',
+        'last_seen_at',
+        'last_ip',
+        'last_user_agent',
     ];
 
     protected $casts = [
-        'last_active_at' => 'datetime',
-        'is_active' => 'boolean',
+        'last_seen_at' => 'datetime',
+        'is_trusted' => 'boolean',
     ];
 
     public function user()

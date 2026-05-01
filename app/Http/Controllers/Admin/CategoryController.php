@@ -15,35 +15,15 @@ class CategoryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Category::query();
-
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('slug', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->has('status')) {
-            $query->where('status', $request->get('status'));
-        }
-
-        $sortBy = $request->get('sort_by', 'sort_order');
-        $sortOrder = $request->get('sort_order', 'asc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        $perPage = $request->get('per_page', 15);
-        $categories = $query->paginate($perPage);
+        $categories = Category::orderBy('sort_order', 'asc')->get();
 
         return response()->json([
-            'data' => $categories->items(),
+            'data' => $categories,
             'meta' => [
-                'current_page' => $categories->currentPage(),
-                'last_page' => $categories->lastPage(),
-                'per_page' => $categories->perPage(),
-                'total' => $categories->total(),
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => $categories->count(),
+                'total' => $categories->count(),
             ]
         ]);
     }

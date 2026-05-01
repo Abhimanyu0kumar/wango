@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -22,7 +23,7 @@ class UserController extends Controller
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('email', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -95,7 +96,7 @@ class UserController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $user->load('profile')
+            'data' => $user->load('profile', 'walletAccounts')
         ]);
     }
 
@@ -149,24 +150,22 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Toggle or set user active status.
-     */
     public function UserActive(Request $request, User $user)
     {
-        // Support both explicit value and toggle behavior
-        if ($request->has('active')) {
-            $user->active = $request->boolean('active');
-        } else {
-            $user->active = !$user->active;
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
         }
-        
-        $user->save();
+
+        $active = $request->has('active') ? $request->boolean('active') : !$user->active;
+        $user->update(['active' => $active]);
 
         return response()->json([
             'success' => true,
-            'message' => 'User ' . ($user->active ? 'activated' : 'deactivated') . ' successfully',
-            'data' => ['active' => $user->active]
+            'message' => 'User ' . ($active ? 'activated' : 'deactivated') . ' successfully',
+            'data' => ['active' => $active]
         ]);
     }
 
@@ -175,19 +174,176 @@ class UserController extends Controller
      */
     public function UserBlocked(Request $request, User $user)
     {
-        // Support both explicit value and toggle behavior
-        if ($request->has('blocked')) {
-            $user->blocked = $request->boolean('blocked');
-        } else {
-            $user->blocked = !$user->blocked;
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
         }
-        
-        $user->save();
+
+        $blocked = $request->has('blocked') ? $request->boolean('blocked') : !$user->blocked;
+        $user->update(['blocked' => $blocked]);
 
         return response()->json([
             'success' => true,
-            'message' => 'User ' . ($user->blocked ? 'blocked' : 'unblocked') . ' successfully',
-            'data' => ['blocked' => $user->blocked]
+            'message' => 'User ' . ($blocked ? 'blocked' : 'unblocked') . ' successfully',
+            'data' => ['blocked' => $blocked]
+        ]);
+    }
+
+    /**
+     * Display user's profile.
+     */
+    public function showProfile(User $user)
+    {
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        $profile = $user->profile;
+
+        if (!$profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $profile
+        ]);
+    }
+
+    /**
+     * Create or update user's profile.
+     */
+    public function updateProfile(Request $request, User $user)
+    {
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => 'nullable|string|max:255',
+            'avatar_url' => 'nullable|string',
+            'date_of_birth' => 'nullable|date',
+            'gender' => 'nullable|in:male,female,other',
+            'country_code' => 'nullable|string|max:10',
+            'preferred_currency' => 'nullable|string|max:10',
+            'address_data' => 'nullable|array',
+            'kyc_status' => 'nullable|integer|in:0,1,2,3',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        if ($user->profile) {
+            $user->profile->update($data);
+            $message = 'Profile updated successfully';
+        } else {
+            $data['user_id'] = $user->id;
+            $profile = UserProfile::create($data);
+            $message = 'Profile created successfully';
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $user->profile->fresh()
+        ]);
+    }
+
+    /**
+     * Delete user's profile.
+     */
+    public function deleteProfile(User $user)
+    {
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        if (!$user->profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found'
+            ], 404);
+        }
+
+        $user->profile->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile deleted successfully'
+        ]);
+    }
+
+    /**
+     * Get user's wallets.
+     */
+    public function wallets(User $user)
+    {
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        $wallets = $user->walletAccounts()->with('ledgers')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $wallets
+        ]);
+    }
+
+    /**
+     * Get user's withdrawals.
+     */
+    public function withdrawals(Request $request, User $user)
+    {
+        if (!$user->exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        $query = $user->withdrawals()->with('wallet');
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->get('status'));
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $withdrawals = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $withdrawals->items(),
+            'meta' => [
+                'current_page' => $withdrawals->currentPage(),
+                'last_page' => $withdrawals->lastPage(),
+                'per_page' => $withdrawals->perPage(),
+                'total' => $withdrawals->total(),
+            ]
         ]);
     }
 }
