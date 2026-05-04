@@ -29,10 +29,6 @@ return new class extends Migration
                 ->comment('0=not_submitted,1=pending,2=approved,3=rejected');
             $table->timestamps();
 
-            // $table->foreign('user_id')
-            //     ->references('id')
-            //     ->on('users')
-            //     ->cascadeOnDelete();
             $table->index('name');
             $table->index('country_code');
             $table->index('preferred_currency');

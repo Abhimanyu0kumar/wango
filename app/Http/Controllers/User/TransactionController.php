@@ -13,7 +13,7 @@ class TransactionController extends Controller
      */
     public function index(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $query = $user->transactions()->with('wallet');
 
@@ -55,7 +55,7 @@ class TransactionController extends Controller
      */
     public function show(string $id)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $transaction = $user->transactions()->with('wallet')->find($id);
 

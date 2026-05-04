@@ -15,7 +15,7 @@ class WithdrawalController extends Controller
      */
     public function index(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $query = $user->withdrawals()->with('wallet');
 
@@ -52,10 +52,10 @@ class WithdrawalController extends Controller
      */
     public function store(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
-            'wallet_id' => 'required|exists:wallet_accounts,id,user_id,' . $user->id,
+            'wallet_id' => 'nullable|exists:wallet_accounts,id,user_id,' . $user->id,
             'amount' => 'required|numeric|min:1',
             'payout_method' => 'required|string|in:upi,bank_transfer,crypto',
             'account_name' => 'required_if:payout_method,bank_transfer|string',
@@ -68,15 +68,25 @@ class WithdrawalController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Auto-select user's wallet if not provided
+        $walletId = $request->wallet_id;
+        if (!$walletId) {
+            $wallet = $user->walletAccounts()->first();
+            if (!$wallet) {
+                return response()->json(['message' => 'No wallet found. Please create a wallet first.'], 404);
+            }
+            $walletId = $wallet->id;
+        }
+
         // Check wallet balance
-        $wallet = $user->walletAccounts()->find($request->wallet_id);
+        $wallet = $user->walletAccounts()->find($walletId);
         if (!$wallet || $wallet->available_balance < $request->amount) {
             return response()->json(['message' => 'Insufficient balance'], 400);
         }
 
         $withdrawal = Withdrawal::create([
             'user_id' => $user->id,
-            'wallet_id' => $request->wallet_id,
+            'wallet_id' => $walletId,
             'amount' => $request->amount,
             'payout_method' => $request->payout_method,
             'account_name' => $request->account_name,
@@ -98,7 +108,7 @@ class WithdrawalController extends Controller
      */
     public function show(string $id)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $withdrawal = $user->withdrawals()->with('wallet')->find($id);
 

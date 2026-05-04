@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\{
     RoleController,
     KycController,
     WithdrawalController,
+    DepositController,
+    TransactionController,
     WalletController,
     UserController,
     CategoryController,
@@ -153,6 +155,14 @@ Route::prefix('admin/v1')->group(function () {
         Route::post('/wallets/{id}/unfreeze', [WalletController::class, 'unfreeze']);
         Route::patch('/wallets/{id}/status', [WalletController::class, 'updateStatus']);
 
+        // Deposit API Routes
+        Route::get('/deposits', [DepositController::class, 'index']);
+        Route::get('/deposits/stats', [DepositController::class, 'stats']);
+        Route::get('/deposits/{id}', [DepositController::class, 'show']);
+        Route::post('/deposits/{id}/approve', [DepositController::class, 'approve']);
+        Route::post('/deposits/{id}/reject', [DepositController::class, 'reject']);
+        Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel']);
+
         // Withdrawal API Routes
         Route::get('/withdrawals', [WithdrawalController::class, 'index']);
         Route::get('/withdrawals/stats', [WithdrawalController::class, 'stats']);
@@ -161,6 +171,12 @@ Route::prefix('admin/v1')->group(function () {
         Route::post('/withdrawals/{id}/reject', [WithdrawalController::class, 'reject']);
         Route::post('/withdrawals/{id}/paid', [WithdrawalController::class, 'markAsPaid']);
         Route::post('/withdrawals/{id}/cancel', [WithdrawalController::class, 'cancel']);
+
+        // Transaction API Routes
+        Route::get('/transactions', [TransactionController::class, 'index']);
+        Route::get('/transactions/stats', [TransactionController::class, 'stats']);
+        Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+        Route::post('/transactions/{id}/reverse', [TransactionController::class, 'reverse']);
 
         // Dashboard API Routes
         Route::get('/dashboard/summary', [DashboardController::class, 'summary']);

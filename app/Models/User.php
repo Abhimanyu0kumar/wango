@@ -77,4 +77,29 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserDevice::class);
     }
+
+    public function vipStatus()
+    {
+        return $this->hasOne(UserVipStatus::class);
+    }
+
+    public function rewards()
+    {
+        return $this->hasMany(UserReward::class);
+    }
+
+    public function promotionClaims()
+    {
+        return $this->hasMany(PromotionClaim::class);
+    }
+
+    public function referrals()
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
+    public function referrer()
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
 }

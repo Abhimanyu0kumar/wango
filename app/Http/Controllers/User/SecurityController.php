@@ -15,7 +15,7 @@ class SecurityController extends Controller
      */
     public function show(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
         $security = $user->securitySettings;
 
         return response()->json([
@@ -35,7 +35,7 @@ class SecurityController extends Controller
      */
     public function updatePassword(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
@@ -71,7 +71,7 @@ class SecurityController extends Controller
      */
     public function updatePin(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
             'pin' => 'required|string|size:4',
@@ -106,7 +106,7 @@ class SecurityController extends Controller
      */
     public function toggle2FA(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
             'enabled' => 'required|boolean',
@@ -139,7 +139,7 @@ class SecurityController extends Controller
      */
     public function devices(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
         $devices = $user->devices()->where('is_active', true)->get();
 
         return response()->json([
@@ -153,7 +153,7 @@ class SecurityController extends Controller
      */
     public function revokeDevice(string $id)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $device = $user->devices()->find($id);
 

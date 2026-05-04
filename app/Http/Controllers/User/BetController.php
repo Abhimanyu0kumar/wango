@@ -13,7 +13,7 @@ class BetController extends Controller
      */
     public function index(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $query = $user->bets()->with(['game', 'round', 'settlement']);
 
@@ -55,7 +55,7 @@ class BetController extends Controller
      */
     public function show(string $id)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $bet = $user->bets()->with(['game', 'round', 'settlement', 'wallet'])->find($id);
 

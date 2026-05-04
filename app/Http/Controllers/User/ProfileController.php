@@ -14,7 +14,7 @@ class ProfileController extends Controller
      */
     public function show(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         return response()->json([
             'data' => [
@@ -32,7 +32,7 @@ class ProfileController extends Controller
      */
     public function update(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
             'name' => 'nullable|string|max:255',
@@ -76,7 +76,7 @@ class ProfileController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         if ($user->profile) {
             $user->profile->update(['avatar_url' => $request->avatar_url]);

@@ -15,7 +15,7 @@ class KycController extends Controller
      */
     public function show(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $kycDocs = $user->kycDocuments;
         $kycStatus = $user->profile?->kyc_status ?? 0;
@@ -42,7 +42,7 @@ class KycController extends Controller
      */
     public function store(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
             'document_type' => 'required|string|in:passport,drivers_license,national_id,aadhaar,pan_card',
@@ -93,7 +93,7 @@ class KycController extends Controller
      */
     public function update(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         // Only allow update if rejected or not submitted
         if ($user->profile?->kyc_status === 2) {

@@ -38,6 +38,9 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // Track device on login
+        $this->trackDevice($user, $request);
+
         $user->tokens()->delete();
         $token = $user->createToken(self::$user_token)->accessToken;
 
@@ -45,6 +48,44 @@ class AuthController extends Controller
             ->additional([
                 'message' => 'User logged in successfully.'
             ]);
+    }
+
+    /**
+     * Track user device on login
+     */
+    private function trackDevice(User $user, Request $request): void
+    {
+        $deviceFingerprint = md5($request->ip() . $request->userAgent());
+
+        $user->devices()->updateOrCreate(
+            ['device_fingerprint' => $deviceFingerprint],
+            [
+                'platform' => $this->detectPlatform($request->userAgent()),
+                'last_seen_at' => now(),
+                'last_ip' => $request->ip(),
+                'last_user_agent' => $request->userAgent(),
+                'is_trusted' => $user->devices()->where('device_fingerprint', $deviceFingerprint)->exists() 
+                    ? $user->devices()->where('device_fingerprint', $deviceFingerprint)->value('is_trusted') 
+                    : false,
+            ]
+        );
+    }
+
+    /**
+     * Detect platform from user agent
+     */
+    private function detectPlatform(?string $userAgent): string
+    {
+        if (!$userAgent) return 'unknown';
+        
+        return match (true) {
+            str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad') => 'ios',
+            str_contains($userAgent, 'Android') => 'android',
+            str_contains($userAgent, 'Windows') => 'windows',
+            str_contains($userAgent, 'Mac') => 'macos',
+            str_contains($userAgent, 'Linux') => 'linux',
+            default => 'web',
+        };
     }
 
     public function signup(SignupRequest $request)
@@ -92,6 +133,14 @@ class AuthController extends Controller
             'name' => $data['name'],
         ]);
 
+        // Create default wallet for user
+        $user->walletAccounts()->create([
+            'currency' => 'INR',
+            'available_balance' => 0,
+            'locked_balance' => 0,
+            'status' => 'active',
+        ]);
+
         $token = $user->createToken(self::$user_token)->accessToken;
 
         return (new UserLoginResource($user->load('profile'), $token))
@@ -105,7 +154,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         // Revoke the current access token
         $bearerToken = $request->bearerToken();

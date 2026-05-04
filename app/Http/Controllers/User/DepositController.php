@@ -9,13 +9,9 @@ use Illuminate\Support\Facades\Validator;
 
 class DepositController extends Controller
 {
-    /**
-     * List authenticated user's deposits
-     * GET /user/v1/deposits
-     */
     public function index(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $query = $user->deposits()->with('wallet');
 
@@ -46,16 +42,12 @@ class DepositController extends Controller
         ]);
     }
 
-    /**
-     * Create a new deposit
-     * POST /user/v1/deposits
-     */
     public function store(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $validator = Validator::make($request->all(), [
-            'wallet_id' => 'required|exists:wallet_accounts,id,user_id,' . $user->id,
+            'wallet_id' => 'nullable|exists:wallet_accounts,id,user_id,' . $user->id,
             'amount' => 'required|numeric|min:1',
             'payment_method' => 'required|string|in:upi,bank_transfer,card,crypto',
             'gateway_name' => 'nullable|string',
@@ -65,9 +57,19 @@ class DepositController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Auto-select user's wallet if not provided
+        $walletId = $request->wallet_id;
+        if (!$walletId) {
+            $wallet = $user->walletAccounts()->first();
+            if (!$wallet) {
+                return response()->json(['message' => 'No wallet found. Please create a wallet first.'], 404);
+            }
+            $walletId = $wallet->id;
+        }
+
         $deposit = Deposit::create([
             'user_id' => $user->id,
-            'wallet_id' => $request->wallet_id,
+            'wallet_id' => $walletId,
             'amount' => $request->amount,
             'payment_method' => $request->payment_method,
             'gateway_name' => $request->gateway_name,
@@ -87,7 +89,7 @@ class DepositController extends Controller
      */
     public function show(string $id)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
 
         $deposit = $user->deposits()->with('wallet')->find($id);
 

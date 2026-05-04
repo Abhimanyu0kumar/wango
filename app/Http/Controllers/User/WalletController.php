@@ -13,7 +13,7 @@ class WalletController extends Controller
      */
     public function show(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
         $wallets = $user->walletAccounts()->with('ledgers')->get();
 
         return response()->json([
@@ -27,7 +27,7 @@ class WalletController extends Controller
      */
     public function ledgers(Request $request)
     {
-        $user = auth('api')->user();
+        $user = $this->getUser();
         $walletId = $request->get('wallet_id');
 
         $query = $user->walletAccounts()->with('ledgers');

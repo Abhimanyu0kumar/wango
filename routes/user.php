@@ -11,6 +11,10 @@ use App\Http\Controllers\User\{
     WithdrawalController,
     KycController,
     SecurityController,
+    CategoryController,
+    GameController,
+    VipController,
+    ReferralController,
 };
 
 Route::prefix('user/v1')->group(function () {
@@ -28,6 +32,12 @@ Route::prefix('user/v1')->group(function () {
 
         // Auth
         Route::post('/logout', [AuthController::class, 'logout']);
+
+        // Categories & Games - Public access
+        Route::get('/categories', [CategoryController::class, 'index']);
+        Route::get('/categories/{id}', [CategoryController::class, 'show']);
+        Route::get('/games', [GameController::class, 'index']);
+        Route::get('/games/{id}', [GameController::class, 'show']);
 
         // Profile - Self-service only (no ID parameter, always uses auth user)
         Route::get('/me', [ProfileController::class, 'show']);              // Get own profile
@@ -68,5 +78,15 @@ Route::prefix('user/v1')->group(function () {
         Route::put('/security/2fa', [SecurityController::class, 'toggle2FA']);
         Route::get('/security/devices', [SecurityController::class, 'devices']); // List devices
         Route::delete('/security/devices/{id}', [SecurityController::class, 'revokeDevice']);
+
+        // VIP & Rewards
+        Route::get('/vip/status', [VipController::class, 'status']);      // Get VIP status
+        Route::get('/vip/rewards', [VipController::class, 'rewards']);     // Get available rewards
+        Route::post('/vip/rewards/claim', [VipController::class, 'claimReward']); // Claim reward
+        Route::get('/vip/benefits', [VipController::class, 'benefits']);    // Get VIP benefits
+
+        // Referrals
+        Route::get('/referrals', [ReferralController::class, 'index']);    // Get referral stats
+        Route::get('/referrals/earnings', [ReferralController::class, 'earnings']); // Get earnings
     });
 });
