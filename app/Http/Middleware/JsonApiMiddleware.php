@@ -17,9 +17,9 @@ class JsonApiMiddleware
             return $next($request);
         }
 
-        if ($contentType && ! str_contains($contentType, 'application/json')) {
+        if ($contentType && ! str_contains($contentType, 'application/json') && ! str_contains($contentType, 'multipart/form-data')) {
             return response()->json([
-                'message' => 'Content-Type must be application/json',
+                'message' => 'Content-Type must be application/json or multipart/form-data',
             ], 415);
         }
 

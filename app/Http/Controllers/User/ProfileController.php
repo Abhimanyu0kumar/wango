@@ -93,12 +93,14 @@ class ProfileController extends Controller
 
             // Delete old avatar if exists
             if ($profile->avatar_url) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $profile->avatar_url));
+                $oldPath = parse_url($profile->avatar_url, PHP_URL_PATH);
+                $oldRelativePath = str_replace('/storage/', '', $oldPath);
+                Storage::disk('public')->delete($oldRelativePath);
             }
 
             // Upload new avatar
             $path = $request->file('avatar')->store('avatars', 'public');
-            $avatarUrl = Storage::url($path);
+            $avatarUrl = Storage::disk('public')->url($path);
 
             $profile->avatar_url = $avatarUrl;
             $profile->save();
