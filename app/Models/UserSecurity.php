@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserSecurity extends Model
 {
+    protected $table = 'user_security';
+
     protected $fillable = [
         'user_id',
         'two_factor_enabled',
@@ -14,14 +16,14 @@ class UserSecurity extends Model
         'password_version',
         'last_password_change_at',
         'failed_login_attempts',
-        'lock_out_until',
+        'lockout_until',
     ];
 
     protected $casts = [
         'two_factor_enabled' => 'boolean',
         'two_factor_recovery_codes' => 'array',
         'last_password_change_at' => 'datetime',
-        'lock_out_until' => 'datetime',
+        'lockout_until' => 'datetime',
     ];
 
     public function user()

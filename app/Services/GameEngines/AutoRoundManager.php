@@ -73,45 +73,65 @@ class AutoRoundManager
             'rounds_settled' => 0,
         ];
 
-        $activeRound = LuckyDrawRound::where('game_id', $game->id)
-            ->whereIn('status', ['betting_open', 'locked', 'settling'])
-            ->with('round')
-            ->first();
+        // Get durations from game metadata or use defaults
+        $metadata = $game->metadata ?? [];
+        $durationsConfig = $metadata['durations'] ?? [
+            ['duration' => 10, 'active' => true],
+            ['duration' => 20, 'active' => true],
+            ['duration' => 30, 'active' => true],
+        ];
 
-        if (!$activeRound) {
-            $engine->startNewRound(60);
-            $results['rounds_started']++;
-            return $results;
+        // Filter active durations
+        $activeDurations = array_filter($durationsConfig, fn($d) => ($d['active'] ?? true) === true);
+        $durations = array_column($activeDurations, 'duration');
+
+        if (empty($durations)) {
+            $durations = [10, 20, 30]; // Fallback
         }
 
-        $now = now();
+        // Process each duration independently
+        foreach ($durations as $duration) {
+            $activeRound = LuckyDrawRound::where('game_id', $game->id)
+                ->where('duration_sec', $duration)
+                ->whereIn('status', ['betting_open', 'locked', 'settling'])
+                ->with('round')
+                ->first();
 
-        if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
-            $engine->closeBetting($activeRound);
-            $results['rounds_locked']++;
-            $activeRound->refresh();
-        }
+            if (!$activeRound) {
+                $engine->startNewRound($duration);
+                $results['rounds_started']++;
+                continue;
+            }
 
-        if ($activeRound->status === 'locked') {
-            $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(3);
-            if ($now->greaterThanOrEqualTo($resultTime)) {
-                $engine->generateResult($activeRound);
-                $results['rounds_resulted']++;
+            $now = now();
+
+            if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
+                $engine->closeBetting($activeRound);
+                $results['rounds_locked']++;
                 $activeRound->refresh();
             }
-        }
 
-        if ($activeRound->status === 'settling') {
-            $settleTime = $activeRound->result_at->copy()->addSeconds(5);
-            if ($now->greaterThanOrEqualTo($settleTime)) {
-                $engine->settleRound($activeRound);
-                $results['rounds_settled']++;
+            if ($activeRound->status === 'locked') {
+                $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(5);
+                if ($now->greaterThanOrEqualTo($resultTime)) {
+                    $engine->generateResult($activeRound);
+                    $results['rounds_resulted']++;
+                    $activeRound->refresh();
+                }
             }
-        }
 
-        if ($activeRound->status === 'settled') {
-            $engine->startNewRound(60);
-            $results['rounds_started']++;
+            if ($activeRound->status === 'settling') {
+                $settleTime = $activeRound->result_at->copy()->addSeconds(1);
+                if ($now->greaterThanOrEqualTo($settleTime)) {
+                    $engine->settleRound($activeRound);
+                    $results['rounds_settled']++;
+                }
+            }
+
+            if ($activeRound->status === 'settled') {
+                $engine->startNewRound($duration);
+                $results['rounds_started']++;
+            }
         }
 
         return $results;

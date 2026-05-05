@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Admin\{
     AdminController,
-    AdminEngineController,
     AuthController,
     DashboardController,
     RoleController,
@@ -14,12 +13,11 @@ use App\Http\Controllers\Admin\{
     TransactionController,
     WalletController,
     UserController,
+    UserManagementController,
     CategoryController,
     GameController,
     GameRoundController,
     LuckyDrawRoundController,
-    TeenPattiRoundController,
-    PokerRoundController,
     ReportsController,
 };
 
@@ -71,6 +69,18 @@ Route::prefix('admin/v1')->group(function () {
         Route::get('/users/{user}/wallets', [UserController::class, 'wallets']);
         Route::get('/users/{user}/withdrawals', [UserController::class, 'withdrawals']);
 
+        // User Management API Routes
+        Route::get('/user-management', [UserManagementController::class, 'index']);
+        Route::get('/user-management/{id}', [UserManagementController::class, 'show']);
+        Route::post('/user-management/{userId}/wallet', [UserManagementController::class, 'updateWallet']);
+        Route::post('/user-management/{userId}/password', [UserManagementController::class, 'updatePassword']);
+        Route::put('/user-management/{userId}/profile', [UserManagementController::class, 'updateProfile']);
+        Route::get('/user-management/{userId}/devices', [UserManagementController::class, 'getDevices']);
+        Route::post('/user-management/{userId}/avatar', [UserManagementController::class, 'updateProfilePicture']);
+        Route::post('/kyc/{kycId}/verify', [UserManagementController::class, 'verifyKyc']);
+        Route::patch('/user-management/{userId}/block', [UserManagementController::class, 'toggleBlock']);
+        Route::patch('/user-management/{userId}/active', [UserManagementController::class, 'toggleActive']);
+
         // Category API Routes  
         Route::get('/categories', [CategoryController::class, 'index']);
         Route::post('/categories', [CategoryController::class, 'store']);
@@ -87,16 +97,8 @@ Route::prefix('admin/v1')->group(function () {
         Route::delete('/games/{game}', [GameController::class, 'destroy']);
         Route::patch('/games/{game}/toggle-status', [GameController::class, 'toggleStatus']);
         Route::patch('/games/{game}/maintenance', [GameController::class, 'setMaintenance']);
+        Route::patch('/games/{game}/timers/{duration}', [GameController::class, 'updateTimer']);
 
-        // Game Engine Management Routes
-        Route::get('/engines', [AdminEngineController::class, 'index']);
-        Route::get('/engines/{gameId}', [AdminEngineController::class, 'show']);
-        Route::post('/engines/{gameId}/start', [AdminEngineController::class, 'start']);
-        Route::post('/engines/{gameId}/stop', [AdminEngineController::class, 'stop']);
-        Route::post('/engines/{gameId}/pause', [AdminEngineController::class, 'pause']);
-        Route::post('/engines/{gameId}/resume', [AdminEngineController::class, 'resume']);
-        Route::post('/engines/{gameId}/force-stop', [AdminEngineController::class, 'forceStop']);
-        Route::post('/engines/{gameId}/restart', [AdminEngineController::class, 'restart']);
 
         // Game Round API Routes
         Route::get('/game-rounds', [GameRoundController::class, 'index']);
@@ -118,28 +120,9 @@ Route::prefix('admin/v1')->group(function () {
         Route::patch('/lucky-draw-rounds/{id}/result', [LuckyDrawRoundController::class, 'setResult']);
         Route::patch('/lucky-draw-rounds/{id}/cancel', [LuckyDrawRoundController::class, 'cancel']);
 
-        // Teen Patti Round API Routes
-        Route::get('/teen-patti-rounds', [TeenPattiRoundController::class, 'index']);
-        Route::post('/teen-patti-rounds', [TeenPattiRoundController::class, 'store']);
-        Route::get('/teen-patti-rounds/{id}', [TeenPattiRoundController::class, 'show']);
-        Route::put('/teen-patti-rounds/{id}', [TeenPattiRoundController::class, 'update']);
-        Route::delete('/teen-patti-rounds/{id}', [TeenPattiRoundController::class, 'destroy']);
-        Route::patch('/teen-patti-rounds/{id}/status', [TeenPattiRoundController::class, 'updateStatus']);
-        Route::patch('/teen-patti-rounds/{id}/result', [TeenPattiRoundController::class, 'setResult']);
-        Route::patch('/teen-patti-rounds/{id}/cancel', [TeenPattiRoundController::class, 'cancel']);
-
-        // Poker Round API Routes
-        Route::get('/poker-rounds', [PokerRoundController::class, 'index']);
-        Route::post('/poker-rounds', [PokerRoundController::class, 'store']);
-        Route::get('/poker-rounds/{id}', [PokerRoundController::class, 'show']);
-        Route::put('/poker-rounds/{id}', [PokerRoundController::class, 'update']);
-        Route::delete('/poker-rounds/{id}', [PokerRoundController::class, 'destroy']);
-        Route::patch('/poker-rounds/{id}/flop', [PokerRoundController::class, 'dealFlop']);
-        Route::patch('/poker-rounds/{id}/turn', [PokerRoundController::class, 'dealTurn']);
-        Route::patch('/poker-rounds/{id}/river', [PokerRoundController::class, 'dealRiver']);
-        Route::patch('/poker-rounds/{id}/showdown', [PokerRoundController::class, 'evaluateShowdown']);
-        Route::patch('/poker-rounds/{id}/settle', [PokerRoundController::class, 'settle']);
-        Route::patch('/poker-rounds/{id}/cancel', [PokerRoundController::class, 'cancel']);
+        // Lucky Draw Duration Management Routes
+        Route::get('/lucky-draw/{gameId}/durations', [LuckyDrawRoundController::class, 'getDurations']);
+        Route::post('/lucky-draw/{gameId}/toggle-duration', [LuckyDrawRoundController::class, 'toggleDuration']);
 
         // Wallet API Routes
         Route::get('/wallets', [WalletController::class, 'index']);

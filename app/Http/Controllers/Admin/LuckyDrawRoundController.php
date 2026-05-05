@@ -286,4 +286,94 @@ class LuckyDrawRoundController extends Controller
             'data' => $round
         ]);
     }
+
+    /**
+     * Toggle duration active status for a game
+     * POST /admin/v1/lucky-draw/{gameId}/toggle-duration
+     */
+    public function toggleDuration(Request $request, string $gameId)
+    {
+        $validator = Validator::make($request->all(), [
+            'duration' => 'required|integer|min:5|max:300',
+            'active' => 'required|boolean',
+            'multipliers' => 'nullable|array',
+            'multipliers.small' => 'nullable|numeric|min:1',
+            'multipliers.draw' => 'nullable|numeric|min:1',
+            'multipliers.big' => 'nullable|numeric|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $game = \App\Models\Game::find($gameId);
+        if (!$game) {
+            return response()->json(['message' => 'Game not found'], 404);
+        }
+
+        $data = $validator->validated();
+        $metadata = $game->metadata ?? [];
+        $durations = $metadata['durations'] ?? [];
+
+        // Find existing duration config or create new
+        $durationIndex = array_search($data['duration'], array_column($durations, 'duration'));
+
+        if ($durationIndex !== false) {
+            // Update existing
+            $durations[$durationIndex]['active'] = $data['active'];
+            if (isset($data['multipliers'])) {
+                $durations[$durationIndex]['multipliers'] = $data['multipliers'];
+            }
+        } else {
+            // Add new duration
+            $durations[] = [
+                'duration' => $data['duration'],
+                'active' => $data['active'],
+                'multipliers' => $data['multipliers'] ?? [
+                    'small' => 1.9,
+                    'draw' => 4.5,
+                    'big' => 1.9,
+                ],
+            ];
+        }
+
+        $metadata['durations'] = $durations;
+        $game->metadata = $metadata;
+        $game->save();
+
+        return response()->json([
+            'message' => 'Duration updated successfully',
+            'data' => [
+                'game_id' => $game->id,
+                'durations' => $durations,
+            ]
+        ]);
+    }
+
+    /**
+     * Get game durations configuration
+     * GET /admin/v1/lucky-draw/{gameId}/durations
+     */
+    public function getDurations(string $gameId)
+    {
+        $game = \App\Models\Game::find($gameId);
+        if (!$game) {
+            return response()->json(['message' => 'Game not found'], 404);
+        }
+
+        $metadata = $game->metadata ?? [];
+        $durations = $metadata['durations'] ?? [
+            ['duration' => 10, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+            ['duration' => 20, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+            ['duration' => 30, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+        ];
+
+        return response()->json([
+            'data' => [
+                'game_id' => $game->id,
+                'game_name' => $game->name,
+                'durations' => $durations,
+            ]
+        ]);
+    }
 }

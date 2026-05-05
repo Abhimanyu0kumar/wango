@@ -5,6 +5,7 @@ namespace App\Http\Controllers\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
@@ -50,6 +51,12 @@ class ProfileController extends Controller
         // Update or create profile
         $profileData = array_filter($validator->validated(), fn($v) => $v !== null);
 
+        // Convert gender string to integer for database
+        if (isset($profileData['gender'])) {
+            $genderMap = ['male' => 1, 'female' => 2, 'other' => 3];
+            $profileData['gender'] = $genderMap[$profileData['gender']] ?? null;
+        }
+
         if ($user->profile) {
             $user->profile->update($profileData);
         } else {
@@ -63,13 +70,13 @@ class ProfileController extends Controller
     }
 
     /**
-     * Update avatar
-     * PUT /user/v1/me/avatar
+     * Update avatar with file upload
+     * POST /user/v1/me/avatar
      */
     public function updateAvatar(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'avatar_url' => 'required|url|max:500',
+            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -78,15 +85,30 @@ class ProfileController extends Controller
 
         $user = $this->getUser();
 
-        if ($user->profile) {
-            $user->profile->update(['avatar_url' => $request->avatar_url]);
-        } else {
-            $user->profile()->create(['avatar_url' => $request->avatar_url]);
-        }
+        try {
+            $profile = $user->profile;
+            if (!$profile) {
+                $profile = $user->profile()->create([]);
+            }
 
-        return response()->json([
-            'message' => 'Avatar updated successfully',
-            'avatar_url' => $request->avatar_url
-        ]);
+            // Delete old avatar if exists
+            if ($profile->avatar_url) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $profile->avatar_url));
+            }
+
+            // Upload new avatar
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $avatarUrl = Storage::url($path);
+
+            $profile->avatar_url = $avatarUrl;
+            $profile->save();
+
+            return response()->json([
+                'message' => 'Avatar updated successfully',
+                'data' => ['avatar_url' => $avatarUrl]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to upload image: ' . $e->getMessage()], 500);
+        }
     }
 }

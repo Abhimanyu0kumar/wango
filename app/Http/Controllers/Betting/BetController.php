@@ -8,8 +8,6 @@ use App\Models\Game;
 use App\Models\WalletAccount;
 use App\Models\WalletLedger;
 use App\Services\GameEngines\LuckyDrawGameEngine;
-use App\Services\GameEngines\TeenPattiGameEngine;
-use App\Services\GameEngines\PokerGameEngine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,56 +35,23 @@ class BetController extends Controller
         foreach ($games as $game) {
             $metadata = $game->metadata ?? [];
             
-            if ($game->engine_key === 'dice') {
-                $odds[] = [
-                    'game_id' => $game->id,
-                    'game_name' => $game->name,
-                    'engine_key' => 'dice',
-                    'min_bet' => $game->min_bet,
-                    'max_bet' => $game->max_bet,
-                    'bet_types' => ['small', 'draw', 'big'],
-                    'multipliers' => [
-                        'small' => $metadata['small_multiplier'] ?? 1.9,
-                        'draw' => $metadata['draw_multiplier'] ?? 4.5,
-                        'big' => $metadata['big_multiplier'] ?? 1.9,
-                    ],
-                ];
-            } elseif ($game->engine_key === 'teenpatti') {
-                $odds[] = [
-                    'game_id' => $game->id,
-                    'game_name' => $game->name,
-                    'engine_key' => 'teenpatti',
-                    'min_bet' => $game->min_bet,
-                    'max_bet' => $game->max_bet,
-                    'bet_types' => ['pair_plus', 'color', 'sequence', 'trail'],
-                    'multipliers' => [
-                        'pair_plus' => $metadata['pair_plus_multiplier'] ?? 3.0,
-                        'color' => $metadata['color_multiplier'] ?? 2.0,
-                        'sequence' => $metadata['sequence_multiplier'] ?? 4.0,
-                        'trail' => $metadata['trail_multiplier'] ?? 10.0,
-                    ],
-                ];
-            } elseif ($game->engine_key === 'poker') {
-                $odds[] = [
-                    'game_id' => $game->id,
-                    'game_name' => $game->name,
-                    'engine_key' => 'poker',
-                    'min_bet' => $game->min_bet,
-                    'max_bet' => $game->max_bet,
-                    'bet_types' => ['royal_flush', 'straight_flush', 'four_of_a_kind', 'full_house', 'flush', 'straight', 'three_of_a_kind', 'two_pair', 'one_pair', 'high_card'],
-                    'multipliers' => $metadata['poker_multipliers'] ?? [
-                        'royal_flush' => 50.0,
-                        'straight_flush' => 25.0,
-                        'four_of_a_kind' => 15.0,
-                        'full_house' => 10.0,
-                        'flush' => 8.0,
-                        'straight' => 6.0,
-                        'three_of_a_kind' => 4.0,
-                        'two_pair' => 3.0,
-                        'one_pair' => 2.0,
-                        'high_card' => 1.5,
-                    ],
-                ];
+            if ($game->engine_key === 'lucky_draw' || $game->engine_key === 'dice') {
+                $timers = $metadata['timers'] ?? [];
+                
+                foreach ($timers as $timer) {
+                    if (($timer['status'] ?? 'inactive') !== 'active') continue;
+                    
+                    $odds[] = [
+                        'game_id' => $game->id,
+                        'game_name' => $game->name,
+                        'engine_key' => $game->engine_key,
+                        'duration_sec' => $timer['duration_sec'],
+                        'min_bet' => $game->min_bet,
+                        'max_bet' => $game->max_bet,
+                        'bet_types' => ['small', 'draw', 'big'],
+                        'multipliers' => $timer['multipliers'],
+                    ];
+                }
             }
         }
         
@@ -102,6 +67,7 @@ class BetController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'game_id' => 'required|exists:games,id',
+            'duration_sec' => 'required|integer',
             'amount' => 'required|numeric|min:1',
             'selection' => 'required',
             'idempotency_key' => 'nullable|string|max:255',
@@ -143,8 +109,8 @@ class BetController extends Controller
             ], 422);
         }
 
-        // Get active round based on game type
-        $round = $this->getActiveRound($game);
+        // Get active round based on game type and duration
+        $round = $this->getActiveRound($game, $data['duration_sec']);
         if (!$round || $round->status !== 'betting_open') {
             return response()->json(['message' => 'Betting is not open for this round'], 422);
         }
@@ -233,14 +199,12 @@ class BetController extends Controller
     }
 
     /**
-     * Get active round based on game type
+     * Get active round based on game type and duration
      */
-    private function getActiveRound(Game $game)
+    private function getActiveRound(Game $game, int $duration)
     {
         return match ($game->engine_key) {
-            'dice' => (new LuckyDrawGameEngine($game))->getCurrentOrCreateRound(60),
-            'teenpatti' => (new TeenPattiGameEngine($game))->getCurrentOrCreateRound(60),
-            'poker' => (new PokerGameEngine($game))->getCurrentOrCreateRound(120),
+            'lucky_draw', 'dice' => (new LuckyDrawGameEngine($game))->getCurrentOrCreateRound($duration),
             default => throw new \Exception('Unsupported game type'),
         };
     }
@@ -253,14 +217,12 @@ class BetController extends Controller
         $selectionStr = is_array($selection) ? $selection[0] : $selection;
         
         return match ($game->engine_key) {
-            'dice' => match ($selectionStr) {
+            'lucky_draw', 'dice' => match ($selectionStr) {
                 'small' => $round->small_multiplier ?? 1.9,
                 'draw' => $round->draw_multiplier ?? 4.5,
                 'big' => $round->big_multiplier ?? 1.9,
                 default => 1.0,
             },
-            'teenpatti' => $round->multipliers[$selectionStr] ?? 2.0,
-            'poker' => 2.0, // Simplified
             default => 1.0,
         };
     }

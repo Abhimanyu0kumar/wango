@@ -42,7 +42,9 @@ class LuckyDrawGameEngine
     {
         return DB::transaction(function () use ($durationSec) {
             $now = now();
-            $bettingClosesAt = $now->copy()->addSeconds($durationSec);
+            // Close betting 5 seconds before the duration ends
+            $bettingClosesAt = $now->copy()->addSeconds($durationSec - 5);
+            $resultAt = $now->copy()->addSeconds($durationSec);
 
             // Create game round
             $gameRound = GameRound::create([
@@ -51,15 +53,22 @@ class LuckyDrawGameEngine
                 'state' => self::STATE_BETTING_OPEN,
                 'starts_at' => $now,
                 'betting_closes_at' => $bettingClosesAt,
+                'ended_at' => $resultAt,
                 'total_bet_amount' => 0,
                 'total_payout_amount' => 0,
             ]);
 
-            // Get default multipliers from game metadata or use defaults
+            // Get multipliers from game metadata for this specific duration
             $metadata = $this->game->metadata ?? [];
-            $smallMultiplier = $metadata['small_multiplier'] ?? 1.9;
-            $drawMultiplier = $metadata['draw_multiplier'] ?? 4.5;
-            $bigMultiplier = $metadata['big_multiplier'] ?? 1.9;
+            $durationsConfig = $metadata['durations'] ?? [];
+            
+            // Find multiplier config for this duration
+            $durationConfig = collect($durationsConfig)->firstWhere('duration', $durationSec);
+            $multipliers = $durationConfig['multipliers'] ?? [];
+            
+            $smallMultiplier = $multipliers['small'] ?? $metadata['small_multiplier'] ?? 1.9;
+            $drawMultiplier = $multipliers['draw'] ?? $metadata['draw_multiplier'] ?? 4.5;
+            $bigMultiplier = $multipliers['big'] ?? $metadata['big_multiplier'] ?? 1.9;
 
             // Create lucky draw round
             $luckyDrawRound = LuckyDrawRound::create([
@@ -68,7 +77,7 @@ class LuckyDrawGameEngine
                 'duration_sec' => $durationSec,
                 'betting_starts_at' => $now,
                 'betting_closes_at' => $bettingClosesAt,
-                'result_at' => null,
+                'result_at' => $resultAt,
                 'small_multiplier' => $smallMultiplier,
                 'draw_multiplier' => $drawMultiplier,
                 'big_multiplier' => $bigMultiplier,

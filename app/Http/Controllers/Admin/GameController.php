@@ -177,4 +177,52 @@ class GameController extends Controller
             'status' => $game->status
         ]);
     }
+
+    /**
+     * Update a specific timer's settings in metadata.
+     */
+    public function updateTimer(Request $request, Game $game, $duration)
+    {
+        $validator = Validator::make($request->all(), [
+            'status' => 'nullable|in:active,inactive',
+            'multipliers' => 'nullable|array',
+            'multipliers.small' => 'nullable|numeric|min:1',
+            'multipliers.draw' => 'nullable|numeric|min:1',
+            'multipliers.big' => 'nullable|numeric|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $metadata = $game->metadata ?? [];
+        $timers = $metadata['timers'] ?? [];
+        $found = false;
+
+        foreach ($timers as &$timer) {
+            if ($timer['duration_sec'] == $duration) {
+                $found = true;
+                if ($request->has('status')) {
+                    $timer['status'] = $request->get('status');
+                }
+                if ($request->has('multipliers')) {
+                    $timer['multipliers'] = array_merge($timer['multipliers'] ?? [], $request->get('multipliers'));
+                }
+                break;
+            }
+        }
+
+        if (!$found) {
+            return response()->json(['message' => 'Timer not found'], 404);
+        }
+
+        $metadata['timers'] = $timers;
+        $game->metadata = $metadata;
+        $game->save();
+
+        return response()->json([
+            'message' => 'Timer updated successfully',
+            'data' => $game->metadata
+        ]);
+    }
 }

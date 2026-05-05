@@ -38,11 +38,13 @@ Route::prefix('user/v1')->group(function () {
         Route::get('/categories/{id}', [CategoryController::class, 'show']);
         Route::get('/games', [GameController::class, 'index']);
         Route::get('/games/{id}', [GameController::class, 'show']);
+        Route::get('/games/{game}/timers/{duration}/current-round', [GameController::class, 'activeRound']);
+        Route::get('/games/{game}/active-rounds', [GameController::class, 'activeRounds']);
 
         // Profile - Self-service only (no ID parameter, always uses auth user)
         Route::get('/me', [ProfileController::class, 'show']);              // Get own profile
         Route::put('/me', [ProfileController::class, 'update']);             // Update own profile
-        Route::put('/me/avatar', [ProfileController::class, 'updateAvatar']);// Update avatar
+        Route::post('/me/avatar', [ProfileController::class, 'updateAvatar']);// Update avatar (file upload)
 
         // Wallet - Own wallet only
         Route::get('/wallet', [WalletController::class, 'show']);             // Get wallet balance
