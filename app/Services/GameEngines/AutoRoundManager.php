@@ -73,17 +73,17 @@ class AutoRoundManager
             'rounds_settled' => 0,
         ];
 
-        // Get durations from game metadata or use defaults
+        // Get timers from game metadata or use defaults
         $metadata = $game->metadata ?? [];
-        $durationsConfig = $metadata['durations'] ?? [
-            ['duration' => 10, 'active' => true],
-            ['duration' => 20, 'active' => true],
-            ['duration' => 30, 'active' => true],
+        $timersConfig = $metadata['timers'] ?? [
+            ['duration_sec' => 10, 'status' => 'active'],
+            ['duration_sec' => 20, 'status' => 'active'],
+            ['duration_sec' => 30, 'status' => 'active'],
         ];
 
-        // Filter active durations
-        $activeDurations = array_filter($durationsConfig, fn($d) => ($d['active'] ?? true) === true);
-        $durations = array_column($activeDurations, 'duration');
+        // Filter active timers
+        $activeTimers = array_filter($timersConfig, fn($t) => ($t['status'] ?? 'active') === 'active');
+        $durations = array_column($activeTimers, 'duration_sec');
 
         if (empty($durations)) {
             $durations = [10, 20, 30]; // Fallback
@@ -95,6 +95,7 @@ class AutoRoundManager
                 ->where('duration_sec', $duration)
                 ->whereIn('status', ['betting_open', 'locked', 'settling'])
                 ->with('round')
+                ->orderBy('created_at', 'desc')
                 ->first();
 
             if (!$activeRound) {
@@ -105,14 +106,16 @@ class AutoRoundManager
 
             $now = now();
 
+            // 1. Close betting (5s before end)
             if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
                 $engine->closeBetting($activeRound);
                 $results['rounds_locked']++;
                 $activeRound->refresh();
             }
 
+            // 2. Generate result (1s before end)
             if ($activeRound->status === 'locked') {
-                $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(5);
+                $resultTime = $activeRound->round->starts_at->copy()->addSeconds($duration - 1);
                 if ($now->greaterThanOrEqualTo($resultTime)) {
                     $engine->generateResult($activeRound);
                     $results['rounds_resulted']++;
@@ -120,17 +123,20 @@ class AutoRoundManager
                 }
             }
 
+            // 3. Settle round (immediately after result, before round ends)
             if ($activeRound->status === 'settling') {
-                $settleTime = $activeRound->result_at->copy()->addSeconds(1);
-                if ($now->greaterThanOrEqualTo($settleTime)) {
-                    $engine->settleRound($activeRound);
-                    $results['rounds_settled']++;
-                }
+                $engine->settleRound($activeRound);
+                $results['rounds_settled']++;
+                $activeRound->refresh();
             }
 
+            // 4. Start next round if current is settled and time is up
             if ($activeRound->status === 'settled') {
-                $engine->startNewRound($duration);
-                $results['rounds_started']++;
+                $endTime = $activeRound->round->starts_at->copy()->addSeconds($duration);
+                if ($now->greaterThanOrEqualTo($endTime)) {
+                    $engine->startNewRound($duration);
+                    $results['rounds_started']++;
+                }
             }
         }
 

@@ -60,10 +60,10 @@ class LuckyDrawGameEngine
 
             // Get multipliers from game metadata for this specific duration
             $metadata = $this->game->metadata ?? [];
-            $durationsConfig = $metadata['durations'] ?? [];
+            $timersConfig = $metadata['timers'] ?? [];
             
             // Find multiplier config for this duration
-            $durationConfig = collect($durationsConfig)->firstWhere('duration', $durationSec);
+            $durationConfig = collect($timersConfig)->firstWhere('duration_sec', $durationSec);
             $multipliers = $durationConfig['multipliers'] ?? [];
             
             $smallMultiplier = $multipliers['small'] ?? $metadata['small_multiplier'] ?? 1.9;

@@ -313,22 +313,23 @@ class LuckyDrawRoundController extends Controller
 
         $data = $validator->validated();
         $metadata = $game->metadata ?? [];
-        $durations = $metadata['durations'] ?? [];
+        $timers = $metadata['timers'] ?? [];
 
-        // Find existing duration config or create new
-        $durationIndex = array_search($data['duration'], array_column($durations, 'duration'));
+        // Find existing timer config or create new
+        $timerIndex = array_search($data['duration'], array_column($timers, 'duration_sec'));
 
-        if ($durationIndex !== false) {
+        if ($timerIndex !== false) {
             // Update existing
-            $durations[$durationIndex]['active'] = $data['active'];
+            $timers[$timerIndex]['status'] = $data['active'] ? 'active' : 'inactive';
             if (isset($data['multipliers'])) {
-                $durations[$durationIndex]['multipliers'] = $data['multipliers'];
+                $timers[$timerIndex]['multipliers'] = $data['multipliers'];
             }
         } else {
-            // Add new duration
-            $durations[] = [
-                'duration' => $data['duration'],
-                'active' => $data['active'],
+            // Add new timer
+            $timers[] = [
+                'duration_sec' => $data['duration'],
+                'lock_time_sec' => 5,
+                'status' => $data['active'] ? 'active' : 'inactive',
                 'multipliers' => $data['multipliers'] ?? [
                     'small' => 1.9,
                     'draw' => 4.5,
@@ -337,21 +338,21 @@ class LuckyDrawRoundController extends Controller
             ];
         }
 
-        $metadata['durations'] = $durations;
+        $metadata['timers'] = $timers;
         $game->metadata = $metadata;
         $game->save();
 
         return response()->json([
-            'message' => 'Duration updated successfully',
+            'message' => 'Timer updated successfully',
             'data' => [
                 'game_id' => $game->id,
-                'durations' => $durations,
+                'timers' => $timers,
             ]
         ]);
     }
 
     /**
-     * Get game durations configuration
+     * Get game timers configuration
      * GET /admin/v1/lucky-draw/{gameId}/durations
      */
     public function getDurations(string $gameId)
@@ -362,17 +363,17 @@ class LuckyDrawRoundController extends Controller
         }
 
         $metadata = $game->metadata ?? [];
-        $durations = $metadata['durations'] ?? [
-            ['duration' => 10, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
-            ['duration' => 20, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
-            ['duration' => 30, 'active' => true, 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+        $timers = $metadata['timers'] ?? [
+            ['duration_sec' => 10, 'status' => 'active', 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+            ['duration_sec' => 20, 'status' => 'active', 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
+            ['duration_sec' => 30, 'status' => 'active', 'multipliers' => ['small' => 1.9, 'draw' => 4.5, 'big' => 1.9]],
         ];
 
         return response()->json([
             'data' => [
                 'game_id' => $game->id,
                 'game_name' => $game->name,
-                'durations' => $durations,
+                'timers' => $timers,
             ]
         ]);
     }
