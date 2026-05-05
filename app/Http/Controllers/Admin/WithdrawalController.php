@@ -113,21 +113,12 @@ class WithdrawalController extends Controller
 
         DB::beginTransaction();
         try {
+            // No need to deduct from available_balance here as it was locked during request creation
+            // We just ensure the wallet still exists
             $wallet = WalletAccount::find($withdrawal->wallet_id);
-            
             if (!$wallet) {
                 return response()->json(['message' => 'Wallet not found'], 404);
             }
-
-            // Lock the amount from available balance
-            if ($wallet->available_balance < $withdrawal->amount) {
-                return response()->json(['message' => 'Insufficient wallet balance'], 400);
-            }
-
-            $balanceBefore = $wallet->available_balance;
-            $wallet->available_balance -= $withdrawal->amount;
-            $wallet->locked_balance += $withdrawal->amount;
-            $wallet->save();
 
             // Update withdrawal status
             $withdrawal->status = 'approved';
@@ -138,24 +129,9 @@ class WithdrawalController extends Controller
             $withdrawal->metadata = array_merge($withdrawal->metadata ?? [], $request->metadata ?? []);
             $withdrawal->save();
 
-            // Create ledger entry
-            WalletLedger::create([
-                'wallet_id' => $wallet->id,
-                'user_id' => $wallet->user_id,
-                'txn_type' => 'withdrawal_approved',
-                'direction' => 'debit',
-                'amount' => $withdrawal->amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $wallet->available_balance,
-                'reference_type' => 'withdrawal',
-                'reference_id' => $withdrawal->id,
-                'description' => 'Withdrawal approved by admin',
-                'metadata' => [
-                    'withdrawal_id' => $withdrawal->id,
-                    'approved_by' => $admin->id,
-                ],
-            ]);
-
+            // No need to create a ledger entry here as the available balance does not change
+            // (Funds were already locked/deducted from available_balance during the request phase)
+            
             DB::commit();
 
             return response()->json([
@@ -199,23 +175,26 @@ class WithdrawalController extends Controller
             $withdrawal->rejection_reason = $request->rejection_reason;
             $withdrawal->save();
 
-            // Note: We don't touch the wallet balance here since the amount was never locked
-            // The funds remain in the user's available balance
-
-            // Create ledger entry for record
-            $wallet = WalletAccount::find($withdrawal->wallet_id);
+            // Refund the locked amount back to available balance
+            $wallet = WalletAccount::lockForUpdate()->find($withdrawal->wallet_id);
             if ($wallet) {
+                $balanceBefore = $wallet->available_balance;
+                $wallet->locked_balance -= $withdrawal->amount;
+                $wallet->available_balance += $withdrawal->amount;
+                $wallet->save();
+
+                // Create ledger entry for record
                 WalletLedger::create([
                     'wallet_id' => $wallet->id,
                     'user_id' => $wallet->user_id,
-                    'txn_type' => 'withdrawal_rejected',
-                    'direction' => 'none',
+                    'txn_type' => 'refund',
+                    'direction' => 'credit',
                     'amount' => $withdrawal->amount,
-                    'balance_before' => $wallet->available_balance,
+                    'balance_before' => $balanceBefore,
                     'balance_after' => $wallet->available_balance,
                     'reference_type' => 'withdrawal',
                     'reference_id' => $withdrawal->id,
-                    'description' => 'Withdrawal rejected: ' . $request->rejection_reason,
+                    'description' => 'Withdrawal rejected (Refunded): ' . $request->rejection_reason,
                     'metadata' => [
                         'withdrawal_id' => $withdrawal->id,
                         'rejection_reason' => $request->rejection_reason,
@@ -286,24 +265,8 @@ class WithdrawalController extends Controller
             $withdrawal->metadata = array_merge($withdrawal->metadata ?? [], $request->metadata ?? []);
             $withdrawal->save();
 
-            // Create ledger entry
-            WalletLedger::create([
-                'wallet_id' => $wallet->id,
-                'user_id' => $wallet->user_id,
-                'txn_type' => 'withdrawal_paid',
-                'direction' => 'none',
-                'amount' => $withdrawal->amount,
-                'balance_before' => $balanceBefore,
-                'balance_after' => $wallet->locked_balance,
-                'reference_type' => 'withdrawal',
-                'reference_id' => $withdrawal->id,
-                'description' => 'Withdrawal paid to user',
-                'metadata' => [
-                    'withdrawal_id' => $withdrawal->id,
-                    'gateway_name' => $withdrawal->gateway_name,
-                    'gateway_ref_id' => $withdrawal->gateway_ref_id,
-                ],
-            ]);
+            // No need to create a ledger entry here as available_balance does not change
+            // Only locked_balance was reduced.
 
             DB::commit();
 
@@ -362,8 +325,8 @@ class WithdrawalController extends Controller
                 WalletLedger::create([
                     'wallet_id' => $wallet->id,
                     'user_id' => $wallet->user_id,
-                    'txn_type' => 'withdrawal_cancelled',
-                    'direction' => $withdrawal->status === 'approved' ? 'credit' : 'none',
+                    'txn_type' => 'refund',
+                    'direction' => 'credit',
                     'amount' => $withdrawal->amount,
                     'balance_before' => $wallet->available_balance - ($withdrawal->status === 'approved' ? $withdrawal->amount : 0),
                     'balance_after' => $wallet->available_balance,

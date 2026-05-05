@@ -35,6 +35,7 @@ return new class extends Migration
             $table->string('account_number', 100)->nullable();
             $table->string('ifsc_code', 20)->nullable();
             $table->string('upi_id', 100)->nullable();
+            $table->string('crypto_address', 255)->nullable();
 
             $table->string('gateway_name', 50)->nullable();
             $table->string('gateway_ref_id', 150)->nullable();

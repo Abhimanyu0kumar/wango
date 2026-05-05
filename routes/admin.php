@@ -19,6 +19,7 @@ use App\Http\Controllers\Admin\{
     GameRoundController,
     LuckyDrawRoundController,
     ReportsController,
+    GameEngineController,
 };
 
 Route::prefix('admin/v1')->group(function () {
@@ -67,6 +68,7 @@ Route::prefix('admin/v1')->group(function () {
 
         // User Wallet API Routes
         Route::get('/users/{user}/wallets', [UserController::class, 'wallets']);
+        Route::get('/users/{user}/ledger', [UserController::class, 'ledgers']);
         Route::get('/users/{user}/withdrawals', [UserController::class, 'withdrawals']);
 
         // User Management API Routes
@@ -175,6 +177,16 @@ Route::prefix('admin/v1')->group(function () {
         Route::post('/kyc/{id}/approve', [KycController::class, 'approve']);
         Route::post('/kyc/{id}/reject', [KycController::class, 'reject']);
         Route::post('/kyc/bulk-action', [KycController::class, 'bulkAction']);
+
+        // Game Engine API Routes
+        Route::get('/engines', [GameEngineController::class, 'index']);
+        Route::get('/engines/{gameId}', [GameEngineController::class, 'show']);
+        Route::post('/engines/{gameId}/start', [GameEngineController::class, 'start']);
+        Route::post('/engines/{gameId}/stop', [GameEngineController::class, 'stop']);
+        Route::post('/engines/{gameId}/pause', [GameEngineController::class, 'pause']);
+        Route::post('/engines/{gameId}/resume', [GameEngineController::class, 'resume']);
+        Route::post('/engines/{gameId}/force-stop', [GameEngineController::class, 'forceStop']);
+        Route::post('/engines/{gameId}/restart', [GameEngineController::class, 'restart']);
 
         // Reports & Analytics Routes
         Route::get('/reports/user-activity', [ReportsController::class, 'userActivity']);

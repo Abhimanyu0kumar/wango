@@ -15,6 +15,7 @@ class Withdrawal extends Model
         'account_number',
         'ifsc_code',
         'upi_id',
+        'crypto_address',
         'gateway_name',
         'gateway_ref_id',
         'status',

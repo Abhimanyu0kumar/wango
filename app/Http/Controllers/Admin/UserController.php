@@ -51,9 +51,9 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'nullable|string|max:255',           // Add this
-            'phone' => 'nullable|string|unique:users,phone',
-            'email' => 'required|email|unique:users,email', // Keep email required
+            'name' => 'required|string|max:255',
+            'phone' => 'nullable|string|unique:users,phone|required_without:email',
+            'email' => 'nullable|email|unique:users,email|required_without:phone',
             'password' => 'required|string|min:8',
             'referral_code' => 'nullable|string|unique:users,referral_code',
             'referred_by' => 'nullable|exists:users,id',
@@ -69,23 +69,40 @@ class UserController extends Controller
         }
 
         $data = $validator->validated();
-        $data['password'] = Hash::make($data['password']);
 
         do {
             $referralCode = strtoupper(Str::random(8)); // Example: A8X9K2LM
         } while (User::where('referral_code', $referralCode)->exists());
 
-        $data['referral_code'] = $referralCode;
+        $userData = array_filter([
+            'phone' => $data['phone'] ?? null,
+            'email' => $data['email'] ?? null,
+            'password' => Hash::make($data['password']),
+            'referral_code' => $data['referral_code'] ?? $referralCode,
+            'referred_by' => $data['referred_by'] ?? null,
+            'active' => $data['active'] ?? null,
+            'blocked' => $data['blocked'] ?? null,
+        ], fn($value) => $value !== null);
 
-        // Remove null values to keep DB clean
-        $data = array_filter($data, fn($value) => $value !== null);
+        $user = User::create($userData);
 
-        $user = User::create($data);
+        // Create user profile
+        $user->profile()->create([
+            'name' => $data['name'],
+        ]);
+
+        // Create default wallet for user
+        $user->walletAccounts()->create([
+            'currency' => 'INR',
+            'available_balance' => 0,
+            'locked_balance' => 0,
+            'status' => 'active',
+        ]);
 
         return response()->json([
             'success' => true,
             'message' => 'User created successfully',
-            'data' => $user
+            'data' => $user->load('profile', 'walletAccounts')
         ], 201);
     }
 
@@ -343,6 +360,32 @@ class UserController extends Controller
                 'last_page' => $withdrawals->lastPage(),
                 'per_page' => $withdrawals->perPage(),
                 'total' => $withdrawals->total(),
+            ]
+        ]);
+    }
+
+    /**
+     * Get user's wallet ledger entries.
+     */
+    public function ledgers(Request $request, User $user)
+    {
+        $query = \App\Models\WalletLedger::where('user_id', $user->id);
+
+        if ($request->has('txn_type')) {
+            $query->where('txn_type', $request->get('txn_type'));
+        }
+
+        $perPage = $request->get('per_page', 50);
+        $ledgers = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $ledgers->items(),
+            'meta' => [
+                'current_page' => $ledgers->currentPage(),
+                'last_page' => $ledgers->lastPage(),
+                'per_page' => $ledgers->perPage(),
+                'total' => $ledgers->total(),
             ]
         ]);
     }

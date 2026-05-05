@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class UserSecurity extends Model
 {
     protected $table = 'user_security';
+    protected $primaryKey = 'user_id';
+    public $incrementing = false;
 
     protected $fillable = [
         'user_id',

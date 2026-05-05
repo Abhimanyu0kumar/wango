@@ -14,10 +14,19 @@ class WalletController extends Controller
     public function show(Request $request)
     {
         $user = $this->getUser();
-        $wallets = $user->walletAccounts()->with('ledgers')->get();
+        $wallet = $user->walletAccounts()->first();
+        if (!$wallet) {
+            // Create a default wallet if none exists
+            $wallet = $user->walletAccounts()->create([
+                'currency' => 'INR',
+                'available_balance' => 0,
+                'locked_balance' => 0,
+                'status' => 'active',
+            ]);
+        }
 
         return response()->json([
-            'data' => $wallets
+            'data' => $wallet
         ]);
     }
 

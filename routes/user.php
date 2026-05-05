@@ -26,9 +26,9 @@ Route::prefix('user/v1')->group(function () {
     Route::post('/signup', [AuthController::class, 'signup']);
 
     // ==========================================
-    // Protected routes (user authentication required)
+    // Protected routes (user authentication required) 'throttle:30,1'
     // ==========================================
-    Route::middleware(['auth:api', 'json.api', 'account.active:api', 'throttle:30,1'])->group(function () {
+    Route::middleware(['auth:api', 'json.api', 'account.active:api', ])->group(function () {
 
         // Auth
         Route::post('/logout', [AuthController::class, 'logout']);

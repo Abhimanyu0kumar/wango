@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class WalletLedger extends Model
 {
+    const UPDATED_AT = null;
+
     protected $fillable = [
         'wallet_id',
         'user_id',

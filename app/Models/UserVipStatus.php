@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class UserVipStatus extends Model
 {
     protected $table = 'user_vip_status';
+    protected $primaryKey = 'user_id';
+    public $incrementing = false;
 
     protected $fillable = [
         'user_id',

@@ -4,7 +4,11 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Models\Deposit;
+use App\Models\WalletAccount;
+use App\Models\WalletLedger;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class DepositController extends Controller
@@ -67,18 +71,52 @@ class DepositController extends Controller
             $walletId = $wallet->id;
         }
 
-        $deposit = Deposit::create([
-            'user_id' => $user->id,
-            'wallet_id' => $walletId,
-            'amount' => $request->amount,
-            'payment_method' => $request->payment_method,
-            'gateway_name' => $request->gateway_name,
-            'merchant_order_id' => 'DEP-' . uniqid(),
-            'status' => 'pending',
-        ]);
+        $deposit = DB::transaction(function () use ($user, $walletId, $request) {
+            $deposit = Deposit::create([
+                'user_id' => $user->id,
+                'wallet_id' => $walletId,
+                'amount' => $request->amount,
+                'payment_method' => $request->payment_method,
+                'gateway_name' => $request->gateway_name ?? 'manual',
+                'merchant_order_id' => 'DEP-' . strtoupper(uniqid()),
+                'status' => 'success',
+                'paid_at' => now(),
+            ]);
+
+            $wallet = WalletAccount::lockForUpdate()->find($walletId);
+            $balanceBefore = $wallet->available_balance;
+            $wallet->available_balance += $request->amount;
+            $wallet->save();
+
+            WalletLedger::create([
+                'wallet_id' => $wallet->id,
+                'user_id' => $user->id,
+                'txn_type' => 'deposit',
+                'direction' => 'credit',
+                'amount' => $request->amount,
+                'balance_before' => $balanceBefore,
+                'balance_after' => $wallet->available_balance,
+                'reference_type' => 'deposit',
+                'reference_id' => $deposit->id,
+                'description' => 'Deposit via ' . strtoupper($request->payment_method),
+            ]);
+
+            Transaction::create([
+                'user_id' => $user->id,
+                'wallet_id' => $wallet->id,
+                'transaction_code' => $deposit->merchant_order_id,
+                'source_table' => 'deposits',
+                'source_id' => $deposit->id,
+                'amount' => $request->amount,
+                'txn_type' => 'credit',
+                'status' => 'success',
+            ]);
+
+            return $deposit;
+        });
 
         return response()->json([
-            'message' => 'Deposit initiated successfully',
+            'message' => 'Deposit successful and balance updated',
             'data' => $deposit
         ], 201);
     }
