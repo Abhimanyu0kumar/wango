@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\GameStatusChanged;
 use App\Http\Controllers\Controller;
+use App\Jobs\CreateParallelLuckyDrawRounds;
 use App\Models\Game;
+use App\Models\GameRound;
+use App\Models\LuckyDrawRound;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -152,11 +156,14 @@ class GameController extends Controller
      */
     public function toggleStatus(Game $game)
     {
-        $statuses = ['active', 'inactive', 'maintenance'];
-        $currentIndex = array_search($game->status, $statuses);
-        $nextIndex = ($currentIndex + 1) % count($statuses);
-        $game->status = $statuses[$nextIndex];
+        $previousStatus = $game->status;
+
+        // Simple toggle between active and inactive only
+        $game->status = $previousStatus === 'active' ? 'inactive' : 'active';
         $game->save();
+
+        // Dispatch event when status changes
+        GameStatusChanged::dispatch($game, $previousStatus, $game->status);
 
         return response()->json([
             'message' => 'Game status updated successfully',
@@ -223,6 +230,74 @@ class GameController extends Controller
         return response()->json([
             'message' => 'Timer updated successfully',
             'data' => $game->metadata
+        ]);
+    }
+
+    /**
+     * Get current active rounds for a game.
+     */
+    public function getRounds(Game $game)
+    {
+        $rounds = LuckyDrawRound::where('game_id', $game->id)
+            ->with('round')
+            ->orderBy('created_at', 'desc')
+            ->take(20)
+            ->get()
+            ->map(function ($luckyDrawRound) {
+                return [
+                    'id' => $luckyDrawRound->id,
+                    'round_id' => $luckyDrawRound->round_id,
+                    'round_code' => $luckyDrawRound->round->round_code ?? null,
+                    'duration_sec' => $luckyDrawRound->duration_sec,
+                    'status' => $luckyDrawRound->status,
+                    'betting_starts_at' => $luckyDrawRound->betting_starts_at,
+                    'betting_closes_at' => $luckyDrawRound->betting_closes_at,
+                    'result_at' => $luckyDrawRound->result_at,
+                    'dice_one' => $luckyDrawRound->dice_one,
+                    'dice_two' => $luckyDrawRound->dice_two,
+                    'total' => $luckyDrawRound->total,
+                    'winning_side' => $luckyDrawRound->winning_side,
+                    'multipliers' => [
+                        'small' => $luckyDrawRound->small_multiplier,
+                        'draw' => $luckyDrawRound->draw_multiplier,
+                        'big' => $luckyDrawRound->big_multiplier,
+                    ],
+                    'total_bets' => $luckyDrawRound->round->bets()->count(),
+                    'total_bet_amount' => $luckyDrawRound->round->total_bet_amount,
+                    'created_at' => $luckyDrawRound->created_at,
+                ];
+            });
+
+        return response()->json([
+            'data' => $rounds,
+            'game' => [
+                'id' => $game->id,
+                'name' => $game->name,
+                'status' => $game->status,
+                'timers' => $game->metadata['timers'] ?? [],
+            ]
+        ]);
+    }
+
+    /**
+     * Manually trigger round creation for a game.
+     */
+    public function createRounds(Game $game)
+    {
+        if ($game->status !== 'active') {
+            return response()->json([
+                'message' => 'Game must be active to create rounds',
+                'status' => $game->status
+            ], 422);
+        }
+
+        // Dispatch job to create rounds
+        CreateParallelLuckyDrawRounds::dispatch($game->id);
+
+        return response()->json([
+            'message' => 'Round creation job dispatched',
+            'game_id' => $game->id,
+            'timers' => $game->metadata['timers'] ?? []
         ]);
     }
 }

@@ -66,6 +66,12 @@ class GameController extends Controller
             return response()->json(['message' => 'Game not available'], 404);
         }
 
+        // Get lock_time_sec from timer config
+        $metadata = $game->metadata ?? [];
+        $timers = $metadata['timers'] ?? [];
+        $timerConfig = collect($timers)->firstWhere('duration_sec', (int)$duration);
+        $lockTimeSec = $timerConfig['lock_time_sec'] ?? 5;
+
         $engine = new \App\Services\GameEngines\LuckyDrawGameEngine($game);
         $round = $engine->getCurrentOrCreateRound((int)$duration);
 
@@ -84,6 +90,7 @@ class GameController extends Controller
                 'betting_closes_at' => $round->betting_closes_at,
                 'ended_at' => $round->ended_at,
                 'duration_sec' => (int)$duration,
+                'lock_time_sec' => $lockTimeSec,
                 'multipliers' => [
                     'small' => $luckyDrawRound->small_multiplier ?? 1.9,
                     'draw' => $luckyDrawRound->draw_multiplier ?? 4.5,
@@ -94,7 +101,7 @@ class GameController extends Controller
     }
 
     /**
-     * Get all active rounds for a game (grouped by duration)
+     * Get all active rounds for a game (grouped by duration/timer)
      * GET /user/v1/games/{game}/active-rounds
      */
     public function activeRounds(Game $game)
@@ -103,28 +110,26 @@ class GameController extends Controller
             return response()->json(['message' => 'Game not available'], 404);
         }
 
-        // Get durations from game metadata
+        // Get timers from game metadata
         $metadata = $game->metadata ?? [];
-        $durationsConfig = $metadata['durations'] ?? [
-            ['duration' => 10, 'active' => true],
-            ['duration' => 20, 'active' => true],
-            ['duration' => 30, 'active' => true],
+        $timers = $metadata['timers'] ?? [
+            ['duration_sec' => 10, 'status' => 'active', 'lock_time_sec' => 5],
+            ['duration_sec' => 20, 'status' => 'active', 'lock_time_sec' => 5],
+            ['duration_sec' => 30, 'status' => 'active', 'lock_time_sec' => 5],
         ];
 
-        // Filter active durations
-        $activeDurations = array_filter($durationsConfig, fn($d) => ($d['active'] ?? true) === true);
-        $durations = array_column($activeDurations, 'duration');
-
-        if (empty($durations)) {
-            $durations = [10, 20, 30]; // Fallback
-        }
+        // Filter active timers
+        $activeTimers = array_filter($timers, fn($t) => ($t['status'] ?? 'active') === 'active');
 
         $roundsData = [];
 
-        foreach ($durations as $duration) {
+        foreach ($activeTimers as $timer) {
+            $duration = $timer['duration_sec'];
+            $lockTime = $timer['lock_time_sec'] ?? 5;
+
             $luckyDrawRound = \App\Models\LuckyDrawRound::where('game_id', $game->id)
                 ->where('duration_sec', $duration)
-                ->whereIn('status', ['betting_open', 'locked', 'settling', 'settled'])
+                ->whereIn('status', ['betting_open', 'locked', 'settling'])
                 ->with('round')
                 ->orderBy('created_at', 'desc')
                 ->first();
@@ -132,6 +137,7 @@ class GameController extends Controller
             if ($luckyDrawRound) {
                 $roundsData[] = [
                     'duration_sec' => $duration,
+                    'lock_time_sec' => $lockTime,
                     'round_code' => $luckyDrawRound->round->round_code,
                     'status' => $luckyDrawRound->status,
                     'starts_at' => $luckyDrawRound->betting_starts_at?->toIso8601String(),

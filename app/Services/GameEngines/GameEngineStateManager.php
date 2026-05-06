@@ -208,7 +208,7 @@ class GameEngineStateManager
     public function getAllRunningEngines(): array
     {
         $runningEngines = [];
-        $games = Game::whereIn('engine_key', ['dice', 'teenpatti', 'poker'])->get();
+        $games = Game::whereIn('engine_key', ['dice', 'lucky_draw'])->get();
 
         foreach ($games as $game) {
             $state = $this->getState($game->id);
@@ -226,7 +226,7 @@ class GameEngineStateManager
     public function getAllEngineStatuses(): array
     {
         $statuses = [];
-        $games = Game::whereIn('engine_key', ['dice', 'teenpatti', 'poker'])->get();
+        $games = Game::whereIn('engine_key', ['dice', 'lucky_draw'])->get();
 
         foreach ($games as $game) {
             $info = $this->getEngineInfo($game->id);

@@ -42,8 +42,17 @@ class LuckyDrawGameEngine
     {
         return DB::transaction(function () use ($durationSec) {
             $now = now();
-            // Close betting 5 seconds before the duration ends
-            $bettingClosesAt = $now->copy()->addSeconds($durationSec - 5);
+
+            // Get multipliers and lock time from game metadata for this specific duration
+            $metadata = $this->game->metadata ?? [];
+            $timersConfig = $metadata['timers'] ?? [];
+
+            // Find config for this duration
+            $durationConfig = collect($timersConfig)->firstWhere('duration_sec', $durationSec);
+            $lockTimeSec = $durationConfig['lock_time_sec'] ?? 5;
+
+            // Close betting lock_time_sec seconds before the duration ends
+            $bettingClosesAt = $now->copy()->addSeconds($durationSec - $lockTimeSec);
             $resultAt = $now->copy()->addSeconds($durationSec);
 
             // Create game round
@@ -58,14 +67,9 @@ class LuckyDrawGameEngine
                 'total_payout_amount' => 0,
             ]);
 
-            // Get multipliers from game metadata for this specific duration
-            $metadata = $this->game->metadata ?? [];
-            $timersConfig = $metadata['timers'] ?? [];
-            
-            // Find multiplier config for this duration
-            $durationConfig = collect($timersConfig)->firstWhere('duration_sec', $durationSec);
+            // Get multipliers from duration config
             $multipliers = $durationConfig['multipliers'] ?? [];
-            
+
             $smallMultiplier = $multipliers['small'] ?? $metadata['small_multiplier'] ?? 1.9;
             $drawMultiplier = $multipliers['draw'] ?? $metadata['draw_multiplier'] ?? 4.5;
             $bigMultiplier = $multipliers['big'] ?? $metadata['big_multiplier'] ?? 1.9;

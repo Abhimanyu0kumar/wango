@@ -100,6 +100,8 @@ Route::prefix('admin/v1')->group(function () {
         Route::patch('/games/{game}/toggle-status', [GameController::class, 'toggleStatus']);
         Route::patch('/games/{game}/maintenance', [GameController::class, 'setMaintenance']);
         Route::patch('/games/{game}/timers/{duration}', [GameController::class, 'updateTimer']);
+        Route::get('/games/{game}/rounds', [GameController::class, 'getRounds']);
+        Route::post('/games/{game}/create-rounds', [GameController::class, 'createRounds']);
 
 
         // Game Round API Routes

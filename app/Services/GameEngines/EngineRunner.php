@@ -4,7 +4,6 @@ namespace App\Services\GameEngines;
 
 use App\Models\Game;
 use App\Models\LuckyDrawRound;
-use App\Models\TeenPattiRound;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -124,127 +123,142 @@ class EngineRunner
      * Process a single game's round lifecycle.
      * Returns the current round ID if there is one.
      */
-    private function processGame(Game $game, object $engine): ?int
+    private function processGame(Game $game, LuckyDrawGameEngine $engine): ?int
     {
-        return match ($game->engine_key) {
-            'dice' => $this->processLuckyDraw($game, $engine),
-            'teenpatti' => $this->processTeenPatti($game, $engine),
-            default => null,
-        };
+        // Only Lucky Draw (dice/lucky_draw) is supported
+        return $this->processLuckyDraw($game, $engine);
     }
 
     /**
      * Process Lucky Draw rounds.
+     * Handles parallel rounds for different timer durations.
      */
     private function processLuckyDraw(Game $game, LuckyDrawGameEngine $engine): ?int
     {
-        $activeRound = LuckyDrawRound::where('game_id', $game->id)
+        // Get all active rounds for this game (parallel rounds for different durations)
+        $activeRounds = LuckyDrawRound::where('game_id', $game->id)
             ->whereIn('status', ['betting_open', 'locked', 'settling'])
             ->with('round')
-            ->first();
+            ->get();
 
-        if (!$activeRound) {
-            // No active round — start one if game is active
-            if ($game->status === 'active') {
-                $duration = ($game->metadata['round_duration'] ?? 60);
-                $engine->startNewRound($duration);
-                Log::info("New Lucky Draw round started", ['game_id' => $game->id]);
-            }
-            return null;
-        }
-
+        $processedRoundId = null;
         $now = now();
 
-        // Close betting when time expires
-        if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
-            $engine->closeBetting($activeRound);
-            Log::info("Betting closed", ['round_id' => $activeRound->id]);
-            $activeRound->refresh();
-        }
-
-        // Generate result after locked delay
-        if ($activeRound->status === 'locked') {
-            $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(3);
-            if ($now->greaterThanOrEqualTo($resultTime)) {
-                $engine->generateResult($activeRound);
-                Log::info("Result generated", ['round_id' => $activeRound->id]);
+        // Process each active round independently
+        foreach ($activeRounds as $activeRound) {
+            // Close betting when time expires
+            if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
+                $engine->closeBetting($activeRound);
+                Log::info("Betting closed", [
+                    'round_id' => $activeRound->id,
+                    'duration' => $activeRound->duration_sec,
+                    'game_id' => $game->id
+                ]);
                 $activeRound->refresh();
             }
+
+            // Generate result after locked delay (3 seconds after betting closes)
+            if ($activeRound->status === 'locked') {
+                $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(3);
+                if ($now->greaterThanOrEqualTo($resultTime)) {
+                    $engine->generateResult($activeRound);
+                    Log::info("Result generated", [
+                        'round_id' => $activeRound->id,
+                        'duration' => $activeRound->duration_sec,
+                        'game_id' => $game->id
+                    ]);
+                    $activeRound->refresh();
+                }
+            }
+
+            // Settle after result delay (5 seconds after result generated)
+            if ($activeRound->status === 'settling') {
+                $settleTime = $activeRound->result_at?->copy()->addSeconds(5);
+                if ($settleTime && $now->greaterThanOrEqualTo($settleTime)) {
+                    $engine->settleRound($activeRound);
+                    Log::info("Round settled", [
+                        'round_id' => $activeRound->id,
+                        'duration' => $activeRound->duration_sec,
+                        'game_id' => $game->id
+                    ]);
+
+                    // After settlement, create a new round for this duration
+                    // Only if game is still active
+                    if ($game->status === 'active') {
+                        try {
+                            $newRound = $engine->startNewRound($activeRound->duration_sec);
+                            Log::info("New round created after settlement", [
+                                'old_round_id' => $activeRound->id,
+                                'new_round_id' => $newRound->id,
+                                'duration' => $activeRound->duration_sec,
+                                'game_id' => $game->id
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error("Failed to create new round after settlement", [
+                                'round_id' => $activeRound->id,
+                                'duration' => $activeRound->duration_sec,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            $processedRoundId = $activeRound->id;
         }
 
-        // Settle after result delay
-        if ($activeRound->status === 'settling') {
-            $settleTime = $activeRound->result_at?->copy()->addSeconds(5);
-            if ($settleTime && $now->greaterThanOrEqualTo($settleTime)) {
-                $engine->settleRound($activeRound);
-                Log::info("Round settled", ['round_id' => $activeRound->id]);
+        // If no active rounds exist and game is active, create rounds for all active timers
+        if ($activeRounds->isEmpty() && $game->status === 'active') {
+            $metadata = $game->metadata ?? [];
+            $timers = $metadata['timers'] ?? [];
+
+            foreach ($timers as $timer) {
+                // Only create rounds for active timers
+                if (($timer['status'] ?? 'active') !== 'active') {
+                    continue;
+                }
+
+                $durationSec = $timer['duration_sec'] ?? 60;
+
+                try {
+                    // Double-check no round exists for this duration
+                    $existingRound = LuckyDrawRound::where('game_id', $game->id)
+                        ->where('duration_sec', $durationSec)
+                        ->whereIn('status', ['betting_open', 'locked', 'settling'])
+                        ->first();
+
+                    if (!$existingRound) {
+                        $newRound = $engine->startNewRound($durationSec);
+                        Log::info("Created initial round for timer", [
+                            'game_id' => $game->id,
+                            'round_id' => $newRound->id,
+                            'duration' => $durationSec
+                        ]);
+                        $processedRoundId = $newRound->id;
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Failed to create initial round for timer", [
+                        'game_id' => $game->id,
+                        'duration' => $durationSec,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
         }
 
-        return $activeRound->id;
-    }
-
-    /**
-     * Process Teen Patti rounds.
-     */
-    private function processTeenPatti(Game $game, TeenPattiGameEngine $engine): ?int
-    {
-        $activeRound = TeenPattiRound::where('game_id', $game->id)
-            ->whereIn('status', ['betting_open', 'locked', 'settling'])
-            ->with('round')
-            ->first();
-
-        if (!$activeRound) {
-            if ($game->status === 'active') {
-                $duration = ($game->metadata['round_duration'] ?? 60);
-                $engine->startNewRound($duration);
-                Log::info("New Teen Patti round started", ['game_id' => $game->id]);
-            }
-            return null;
-        }
-
-        $now = now();
-
-        if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
-            $engine->closeBetting($activeRound);
-            $activeRound->refresh();
-        }
-
-        if ($activeRound->status === 'locked') {
-            $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(3);
-            if ($now->greaterThanOrEqualTo($resultTime)) {
-                $engine->generateResult($activeRound);
-                $activeRound->refresh();
-            }
-        }
-
-        if ($activeRound->status === 'settling') {
-            $settleTime = $activeRound->result_at?->copy()->addSeconds(5);
-            if ($settleTime && $now->greaterThanOrEqualTo($settleTime)) {
-                $engine->settleRound($activeRound);
-            }
-        }
-
-        return $activeRound->id;
+        return $processedRoundId;
     }
 
     /**
      * Ensure the current round is settled before shutting down.
      */
-    private function ensureRoundSettled(Game $game, object $engine): void
+    private function ensureRoundSettled(Game $game, LuckyDrawGameEngine $engine): void
     {
-        // Force any in-progress round to settle
-        $activeRound = match ($game->engine_key) {
-            'dice' => LuckyDrawRound::where('game_id', $game->id)
-                ->whereIn('status', ['betting_open', 'locked', 'settling'])
-                ->with('round')
-                ->first(),
-            'teenpatti' => TeenPattiRound::where('game_id', $game->id)
-                ->whereIn('status', ['betting_open', 'locked', 'settling'])
-                ->with('round')
-                ->first(),
-            default => null,
-        };
+        // Force any in-progress Lucky Draw round to settle
+        $activeRound = LuckyDrawRound::where('game_id', $game->id)
+            ->whereIn('status', ['betting_open', 'locked', 'settling'])
+            ->with('round')
+            ->first();
 
         if (!$activeRound) {
             return;
@@ -278,12 +292,9 @@ class EngineRunner
     /**
      * Get the appropriate game engine instance.
      */
-    private function getEngineForGame(Game $game): object
+    private function getEngineForGame(Game $game): LuckyDrawGameEngine
     {
-        return match ($game->engine_key) {
-            'dice' => new LuckyDrawGameEngine($game),
-            'teenpatti' => new TeenPattiGameEngine($game),
-            default => throw new Exception("Unsupported engine key: {$game->engine_key}"),
-        };
+        // Only Lucky Draw is supported
+        return new LuckyDrawGameEngine($game);
     }
 }

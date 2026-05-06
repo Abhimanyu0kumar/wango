@@ -59,8 +59,8 @@ class GameRoundUpdated implements ShouldBroadcast
             $baseData['total_bet_amount'] = round($gameRound->bets()->sum('amount'), 2);
         }
 
-        // Game-specific data
-        if ($gameType === 'dice') {
+        // Game-specific data (only Lucky Draw / Dice is supported)
+        if ($gameType === 'dice' || $gameType === 'lucky_draw') {
             $baseData['dice_one'] = $round->dice_one;
             $baseData['dice_two'] = $round->dice_two;
             $baseData['total'] = $round->total;
@@ -68,14 +68,6 @@ class GameRoundUpdated implements ShouldBroadcast
             $baseData['small_multiplier'] = $round->small_multiplier;
             $baseData['draw_multiplier'] = $round->draw_multiplier;
             $baseData['big_multiplier'] = $round->big_multiplier;
-        } elseif ($gameType === 'teenpatti') {
-            $baseData['cards'] = $round->cards;
-            $baseData['hand_type'] = $round->hand_type;
-            $baseData['winning_bet_type'] = $round->winning_bet_type;
-            $baseData['multipliers'] = $round->multipliers;
-        } elseif ($gameType === 'poker') {
-            $baseData['community_cards'] = $round->community_cards;
-            $baseData['metadata'] = $round->metadata;
         }
 
         return $baseData;

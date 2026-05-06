@@ -12,6 +12,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->register(ScheduleServiceProvider::class);
+        $this->app->register(EventServiceProvider::class);
     }
 
     /**

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('slug', 150)->unique();
 
             $table->string('engine_key', 100);
-            // dice, teenpatti, poker, lottery
+            // dice, lucky_draw (only Lucky Draw is supported)
 
             $table->string('provider', 100)->default('internal');
 

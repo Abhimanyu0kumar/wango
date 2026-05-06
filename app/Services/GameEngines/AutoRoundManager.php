@@ -52,12 +52,8 @@ class AutoRoundManager
      */
     private function processGame(Game $game): array
     {
-        return match ($game->engine_key) {
-            'dice' => $this->processLuckyDrawGame($game),
-            'teenpatti' => $this->processTeenPattiGame($game),
-            'poker' => $this->processPokerGame($game),
-            default => ['rounds_started' => 0, 'rounds_locked' => 0, 'rounds_resulted' => 0, 'rounds_settled' => 0],
-        };
+        // Only Lucky Draw is supported
+        return $this->processLuckyDrawGame($game);
     }
 
     /**
@@ -144,81 +140,11 @@ class AutoRoundManager
     }
 
     /**
-     * Process Teen Patti game
-     */
-    private function processTeenPattiGame(Game $game): array
-    {
-        $engine = new TeenPattiGameEngine($game);
-        $results = [
-            'rounds_started' => 0,
-            'rounds_locked' => 0,
-            'rounds_resulted' => 0,
-            'rounds_settled' => 0,
-        ];
-
-        $activeRound = TeenPattiRound::where('game_id', $game->id)
-            ->whereIn('status', ['betting_open', 'locked', 'settling'])
-            ->with('round')
-            ->first();
-
-        if (!$activeRound) {
-            $engine->startNewRound(60);
-            $results['rounds_started']++;
-            return $results;
-        }
-
-        $now = now();
-
-        if ($activeRound->status === 'betting_open' && $now->greaterThanOrEqualTo($activeRound->betting_closes_at)) {
-            $engine->closeBetting($activeRound);
-            $results['rounds_locked']++;
-            $activeRound->refresh();
-        }
-
-        if ($activeRound->status === 'locked') {
-            $resultTime = $activeRound->betting_closes_at->copy()->addSeconds(3);
-            if ($now->greaterThanOrEqualTo($resultTime)) {
-                $engine->generateResult($activeRound);
-                $results['rounds_resulted']++;
-                $activeRound->refresh();
-            }
-        }
-
-        if ($activeRound->status === 'settling') {
-            $settleTime = $activeRound->result_at->copy()->addSeconds(5);
-            if ($now->greaterThanOrEqualTo($settleTime)) {
-                $engine->settleRound($activeRound);
-                $results['rounds_settled']++;
-            }
-        }
-
-        if ($activeRound->status === 'settled') {
-            $engine->startNewRound(60);
-            $results['rounds_started']++;
-        }
-
-        return $results;
-    }
-
-    /**
-     * Process Poker game (placeholder)
-     */
-    private function processPokerGame(Game $game): array
-    {
-        return ['rounds_started' => 0, 'rounds_locked' => 0, 'rounds_resulted' => 0, 'rounds_settled' => 0];
-    }
-
-    /**
      * Get live state for a game (for real-time broadcasting)
      */
     public function getLiveState(Game $game): ?array
     {
-        return match ($game->engine_key) {
-            'dice' => $this->getLuckyDrawLiveState($game),
-            'teenpatti' => $this->getTeenPattiLiveState($game),
-            'poker' => $this->getPokerLiveState($game),
-            default => null,
-        };
+        return $this->getLuckyDrawLiveState($game);
     }
 
     private function getLuckyDrawLiveState(Game $game): ?array
@@ -253,41 +179,5 @@ class AutoRoundManager
             'draw_multiplier' => $activeRound->draw_multiplier,
             'big_multiplier' => $activeRound->big_multiplier,
         ];
-    }
-
-    private function getTeenPattiLiveState(Game $game): ?array
-    {
-        $activeRound = TeenPattiRound::where('game_id', $game->id)
-            ->whereIn('status', ['betting_open', 'locked', 'settling', 'settled'])
-            ->with(['round', 'round.bets'])
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        if (!$activeRound) {
-            return null;
-        }
-
-        $totalBets = $activeRound->round->bets()->count();
-        $totalBetAmount = $activeRound->round->bets()->sum('amount');
-
-        return [
-            'game_type' => 'teenpatti',
-            'round_id' => $activeRound->round_id,
-            'round_code' => $activeRound->round->round_code,
-            'status' => $activeRound->status,
-            'betting_closes_at' => $activeRound->betting_closes_at?->toIso8601String(),
-            'result_at' => $activeRound->result_at?->toIso8601String(),
-            'cards' => $activeRound->cards,
-            'hand_type' => $activeRound->hand_type,
-            'winning_bet_type' => $activeRound->winning_bet_type,
-            'total_bets' => $totalBets,
-            'total_bet_amount' => round($totalBetAmount, 2),
-            'multipliers' => $activeRound->multipliers,
-        ];
-    }
-
-    private function getPokerLiveState(Game $game): ?array
-    {
-        return null; // Placeholder
     }
 }
